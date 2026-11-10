@@ -6,11 +6,9 @@
 #   tela_detalhes        prints, descrição e o botão "Abrir portal"
 #   tela_administracao   portais, setores e funcionários (só o admin)
 
-import os
 import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
-from tkinter import font as tkfont
 
 from PIL import Image, ImageOps, ImageTk  # Pillow: deixa as imagens do tamanho certo
 
@@ -41,7 +39,7 @@ dados = None
 usuario_logado = None
 tela_atual = ""   # qual tela está aberta agora
 aba_atual = ""    # qual aba da Administração está aberta
-ultima_mudanca = 0
+ultimo_texto = ""  # como o dados.json estava da última vez que olhamos
 fotos = []  # o Tkinter apaga da tela as imagens que não estão guardadas numa lista
 
 
@@ -54,14 +52,15 @@ def texto(pai, conteudo, fonte=FONTE, cor=PRETO):
 
 
 def botao_redondo(pai, conteudo, comando, fundo, cor, fundo_mouse, largura=0, esquerda=False):
-    # O Tkinter não tem botão arredondado, então desenhamos um num Canvas.
+    # O Tkinter não tem botão arredondado, então a gente desenha um num Canvas.
     if largura == 0:
-        largura = tkfont.Font(font=NEGRITO).measure(conteudo) + 44
+        largura = len(conteudo) * 10 + 44  # mais ou menos 10 pixels por letra
     altura = 42
     botao = tk.Canvas(pai, width=largura, height=altura, bg=BRANCO,
                       highlightthickness=0, cursor="hand2")
 
-    # Um retângulo com os cantos repetidos; o smooth=True arredonda esses cantos.
+    # Os pontos do contorno do botão, com cada canto repetido.
+    # O smooth=True faz o Tkinter arredondar esses cantos.
     r = 14
     cantos = [r, 0, largura - r, 0, largura, 0, largura, r,
               largura, altura - r, largura, altura, largura - r, altura,
@@ -129,15 +128,18 @@ def linha(caixa, numero, nome, detalhe, editar, remover, capa=None):
 
 
 def foto(caminho, largura, altura):
-    # Devolve a imagem no tamanho exato do espaço, ou None se o portal não tem imagem.
-    caminho = cadastro.caminho_da_imagem(caminho)
-    if caminho == "" or not os.path.exists(caminho):
+    # Devolve a imagem no tamanho exato do espaço, ou None se não tiver imagem.
+    if caminho == "":
         return None
+    try:
+        imagem = Image.open(caminho)
+    except OSError:
+        return None  # a imagem foi apagada ou mudou de lugar: mostra o desenho padrão
 
     # O ImageOps.fit (do Pillow) aumenta ou diminui a imagem até preencher
-    # todo o espaço. Se sobrar um pouco, corta embaixo, para o topo do
+    # todo o espaço. Se sobrar um pouco, corta embaixo, pra o topo do
     # sistema (onde ficam o nome e o menu) continuar aparecendo.
-    imagem = ImageOps.fit(Image.open(caminho), (largura, altura), centering=(0.5, 0))
+    imagem = ImageOps.fit(imagem, (largura, altura), centering=(0.5, 0))
     imagem = ImageTk.PhotoImage(imagem)
     fotos.append(imagem)
     return imagem
@@ -175,14 +177,7 @@ def desenhar_portal(tela, largura, altura):
 def escolher_imagem():
     caminho = filedialog.askopenfilename(title="Escolha uma imagem",
                                          filetypes=[("Imagens", "*.png *.jpg *.jpeg *.gif")])
-    if caminho == "":
-        return ""
-    try:
-        Image.open(caminho).verify()
-    except OSError:
-        messagebox.showwarning("Central de Acessos", "Não consegui abrir essa imagem. Use PNG ou JPG.")
-        return ""
-    return cadastro.copiar_imagem(caminho)
+    return caminho  # se a pessoa cancelar, vem "" (vazio)
 
 
 def limpar_tela():
@@ -741,21 +736,21 @@ def tela_funcionario(numero):
 # ---------------------------------------------------------------------
 
 def acompanhar_mudancas():
-    global dados, usuario_logado, ultima_mudanca
+    global dados, ultimo_texto
 
     # Quem está preenchendo um formulário não pode perder o que digitou,
-    # então só atualizamos depois que a pessoa sair dele.
-    if tela_atual != "formulário" and cadastro.quando_mudou() != ultima_mudanca:
-        try:
-            novos_dados = cadastro.carregar()
-        except ValueError:
-            novos_dados = None  # o arquivo estava sendo salvo; tenta de novo daqui a pouco
+    # então só atualiza depois que a pessoa sair dele.
+    if tela_atual != "formulário":
+        texto_agora = cadastro.ler_texto()
+        if texto_agora != ultimo_texto:
+            ultimo_texto = texto_agora
+            try:
+                dados = cadastro.texto_para_dados(texto_agora)
+                atualizar_tela()
+            except ValueError:
+                pass  # pegou o arquivo no meio de ser salvo; na próxima volta dá certo
 
-        if novos_dados is not None:
-            dados = novos_dados
-            ultima_mudanca = cadastro.quando_mudou()
-            atualizar_tela()
-
+    # Pede pro Tkinter chamar esta mesma função de novo daqui a 3 segundos.
     janela.after(SEGUNDOS_PARA_CONFERIR * 1000, acompanhar_mudancas)
 
 
@@ -787,19 +782,10 @@ janela = tk.Tk()
 janela.title("Central de Acessos")
 janela.configure(bg=BRANCO)
 janela.minsize(1000, 640)
-try:
-    janela.state("zoomed")  # maximizada no Windows
-except tk.TclError:
-    janela.attributes("-zoomed", True)  # no Linux o comando é outro
+janela.state("zoomed")  # abre maximizada
 
-try:
-    dados = cadastro.carregar()
-    ultima_mudanca = cadastro.quando_mudou()
-except OSError:
-    messagebox.showerror("Central de Acessos", "Não consegui abrir a pasta dos dados:\n" + cadastro.PASTA_DADOS +
-                         "\n\nConfira se o computador está na rede e se o caminho em pasta_dados.txt está certo.")
-    janela.destroy()
-else:
-    tela_entrada()
-    acompanhar_mudancas()
-    janela.mainloop()
+dados = cadastro.carregar()
+ultimo_texto = cadastro.ler_texto()
+tela_entrada()
+acompanhar_mudancas()
+janela.mainloop()

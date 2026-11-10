@@ -35,7 +35,7 @@ Cerca de **7 minutos**. Antes de começar:
 
 ## Extra: ao vivo em dois computadores (1 min, se der tempo)
 
-Antes, configurem os dois computadores com o mesmo `pasta_dados.txt` (veja o README).
+Antes, coloquem o mesmo caminho de pasta da rede no `PASTA` do `cadastro.py` dos dois computadores (veja o README).
 
 1. No computador A, deixem aberto `teste.operacoes`.
 2. No computador B, o `admin` libera um portal para Operações e clica em **Salvar portal**.

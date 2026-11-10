@@ -41,7 +41,7 @@ py central.py
 
 ### Gerar o executável (.exe)
 
-Dê dois cliques em **`gerar_executavel.bat`**. Ele instala o PyInstaller e cria **`dist\CentralDeAcessos.exe`**, que abre sem precisar do Python instalado. O `.exe` guarda o `dados.json` e a pasta `imagens/` na mesma pasta em que ele estiver, então copie o `.exe` para a pasta onde os dados devem ficar.
+Dê dois cliques em **`gerar_executavel.bat`**. Ele instala o PyInstaller e cria **`dist\CentralDeAcessos.exe`**, que abre sem precisar do Python instalado. O `.exe` lê o `dados.json` da pasta em que ele estiver, então copie o `dados.json` para junto do `.exe`.
 
 O PyInstaller só gera `.exe` rodando no Windows. Por isso esse passo precisa ser feito num computador com Windows.
 
@@ -49,20 +49,20 @@ O PyInstaller só gera `.exe` rodando no Windows. Por isso esse passo precisa se
 
 Para todo mundo ver as mesmas informações, os dados ficam numa **pasta compartilhada da rede** da empresa:
 
-1. Crie uma pasta na rede que todos consigam abrir, por exemplo `\\servidor\central`.
-2. Ao lado do `central.py` (ou do `.exe`) de cada computador, crie o arquivo **`pasta_dados.txt`** com o caminho dessa pasta numa linha só:
+1. Crie uma pasta na rede que todos consigam abrir, por exemplo `\\servidor\central`, e coloque o `dados.json` dentro dela.
+2. No começo do `cadastro.py`, escreva o caminho dessa pasta, com barras normais e uma barra no fim:
+   ```python
+   PASTA = "//servidor/central/"
    ```
-   \\servidor\central
-   ```
-3. Abra a Central normalmente em cada computador.
+3. Abra a Central normalmente em cada computador. Se for usar o `.exe`, gere ele depois de mudar o `PASTA`.
 
-A cada 3 segundos, cada Central confere se o `dados.json` da pasta mudou. Se mudou, recarrega e redesenha a tela. Quando o administrador libera um portal, ele aparece para quem está conectado sem precisar fechar nada. Quem está preenchendo um formulário não é interrompido: a tela só atualiza quando a pessoa sai dele.
+A cada 3 segundos, cada Central lê o `dados.json` como texto e compara com a última vez. Se mudou, recarrega e redesenha a tela. Quando o administrador libera um portal, ele aparece para quem está conectado sem precisar fechar nada. Quem está preenchendo um formulário não é interrompido: a tela só atualiza quando a pessoa sai dele.
 
-Sem o `pasta_dados.txt`, os dados ficam na pasta do próprio programa, como antes.
+Com `PASTA = ""`, os dados ficam na pasta do próprio programa.
 
 > Deixe **uma pessoa administrando por vez**. Se dois administradores salvarem ao mesmo tempo, o último a salvar sobrescreve o outro.
 
-Na primeira execução, o programa cria o `dados.json` com os setores, as contas abaixo e seis sistemas públicos já cadastrados: Site da Portonave, Portal Único Siscomex, MarineTraffic, Tábuas de maré, Portal da NF-e e eSocial. Eles ainda não têm capa nem prints; isso se adiciona pela Administração.
+O `dados.json` já vem com os setores, as contas abaixo e seis sistemas públicos cadastrados: Site da Portonave, Portal Único Siscomex, MarineTraffic, Tábuas de maré, Portal da NF-e e eSocial. Eles ainda não têm capa nem prints; isso se adiciona pela Administração.
 
 <details>
 <summary><strong>Contas para o ensaio</strong></summary>
@@ -81,7 +81,7 @@ As contas de teste podem ser apagadas na aba **Funcionários** depois da apresen
 
 Aceita **PNG ou JPG** de qualquer tamanho. O Pillow aumenta ou diminui a imagem até ela preencher todo o espaço. Se a proporção for diferente de 16:9, ele corta um pouco da parte de baixo, para o topo do sistema (nome e menu) continuar aparecendo. Prints da tela inteira, tirados com **Windows + Shift + S**, ficam bons.
 
-As imagens escolhidas são copiadas para a pasta `imagens/`, junto com os dados. Assim o portal não perde a capa se o arquivo original for apagado, e todos os computadores enxergam a mesma imagem.
+O programa guarda o caminho da imagem escolhida. Por isso, deixe as imagens numa pasta fixa (por exemplo, a pasta `imagens` do projeto) e não apague nem mova depois de cadastrar. Se uma imagem sumir, a Central mostra o desenho padrão no lugar, sem dar erro. No modo ao vivo, escolha imagens que estejam na pasta da rede, para todos os computadores enxergarem.
 
 ## Demonstração
 
@@ -99,7 +99,7 @@ O [roteiro completo da apresentação](ROTEIRO_APRESENTACAO.md) inclui a ordem d
 | Arquivo | Responsabilidade |
 | --- | --- |
 | [`acessos.py`](acessos.py) | Filtra os portais pelo setor do funcionário. É o melhor ponto para começar a leitura. |
-| [`cadastro.py`](cadastro.py) | Acha a pasta dos dados (local ou da rede), carrega e salva o `dados.json` e copia as imagens para `imagens/`. |
+| [`cadastro.py`](cadastro.py) | Lê e grava o `dados.json` (`json.load` lê, `json.dump` grava). Tem 35 linhas. |
 | [`central.py`](central.py) | Monta as telas, liga os botões às ações e abre os endereços no navegador. Está dividido em blocos: Entrada, Meus acessos, Detalhes, Administração e Ao vivo. |
 
 O filtro percorre os portais e inclui cada atalho quando o setor da pessoa está entre os liberados:
@@ -124,11 +124,13 @@ Abrir o portal usa a biblioteca padrão do Python:
 webbrowser.open(portal["endereco"])
 ```
 
-E o "ao vivo" é uma função que se chama de novo a cada 3 segundos com `janela.after`:
+E o "ao vivo" é uma função que lê o arquivo, compara com a última vez e pede pro Tkinter chamar ela de novo em 3 segundos:
 
 ```python
-if tela_atual != "formulário" and cadastro.quando_mudou() != ultima_mudanca:
-    dados = cadastro.carregar()
+texto_agora = cadastro.ler_texto()
+if texto_agora != ultimo_texto:
+    ultimo_texto = texto_agora
+    dados = cadastro.texto_para_dados(texto_agora)
     atualizar_tela()
 janela.after(SEGUNDOS_PARA_CONFERIR * 1000, acompanhar_mudancas)
 ```
@@ -139,7 +141,7 @@ Além de `if`, `elif` e `else`, o código usa `def`, listas, dicionários, `for`
 
 O programa foi aberto e as telas foram controladas por um roteiro de teste. Tudo passou:
 
-- **Cadastro:** um portal com capa e 4 prints, liberado só para o Financeiro, é salvo no `dados.json`. Com 4 prints o botão de adicionar some, "Tirar" libera de novo, e as imagens vão para `imagens/`.
+- **Cadastro:** um portal com capa e 4 prints, liberado só para o Financeiro, é salvo no `dados.json`. Com 4 prints o botão de adicionar some, e "Tirar" libera de novo.
 - **Imagens:** um print de 1440 × 900 (proporção diferente) preenche o espaço todo, sem bordas.
 - **Financeiro:** a conta vê o portal. Nome e capa abrem o endereço, e a faixa aparece e some com o mouse. A faixa leva aos detalhes sem abrir o navegador, as miniaturas trocam o print grande e **Abrir portal** abre o endereço.
 - **Operações:** não vê o portal até o administrador liberar. Depois de liberado, vê.
