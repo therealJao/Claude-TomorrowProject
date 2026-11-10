@@ -2,7 +2,7 @@
 
 **Um catálogo de atalhos para os sites e sistemas que cada setor usa no trabalho.**
 
-Projeto acadêmico desenvolvido no SENAI para apresentação à Portonave. A proposta parte de um problema simples: quando cada ferramenta fica em um endereço diferente, encontrar o portal certo toma tempo. A Central reúne esses endereços numa tela e mostra a cada pessoa os atalhos liberados para o seu setor.
+Projeto acadêmico independente, desenvolvido no SENAI para apresentação à Portonave. A proposta parte de um problema simples: quando cada ferramenta fica em um endereço diferente, encontrar o portal certo toma tempo. A Central reúne esses endereços numa tela e mostra a cada pessoa os atalhos liberados para o seu setor.
 
 [Como executar](#como-executar-no-windows) · [Como funciona](#como-funciona) · [Entenda o código](#entenda-o-código) · [Roteiro da apresentação](ROTEIRO_APRESENTACAO.md)
 
@@ -79,8 +79,6 @@ webbrowser.open(portal["endereco"])
 ## Escopo acadêmico
 
 Esta versão roda localmente e usa contas e endereços de exemplo. O filtro por setor organiza a **visibilidade dos atalhos na Central**. As contas de ensaio são gravadas em texto no arquivo local `dados.json`. Para uma implantação interna, a autenticação e a gestão de contas precisariam ser avaliadas com a equipe de TI da empresa.
-
-A Central é um projeto acadêmico independente, apresentado à Portonave no contexto do SENAI.
 
 ## Apoio no desenvolvimento
 
