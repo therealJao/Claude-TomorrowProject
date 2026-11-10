@@ -33,6 +33,16 @@ Cerca de **7 minutos**. Antes de começar:
 4. **Sair** → `teste.operacoes` → agora **aparece**.
 5. Fechem a janela e abram de novo: continua tudo lá.
 
+## Extra: ao vivo em dois computadores (1 min, se der tempo)
+
+Antes, configurem os dois computadores com o mesmo `pasta_dados.txt` (veja o README).
+
+1. No computador A, deixem aberto `teste.operacoes`.
+2. No computador B, o `admin` libera um portal para Operações e clica em **Salvar portal**.
+3. Em até 3 segundos, o portal aparece sozinho no computador A.
+
+> "Os dois programas leem o mesmo arquivo na rede. A cada 3 segundos cada um confere se o arquivo mudou."
+
 ## 5. Por dentro (30 s)
 
 Mostrem o `acessos.py`:

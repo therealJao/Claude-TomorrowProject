@@ -10,6 +10,9 @@ import os
 import tkinter as tk
 import webbrowser
 from tkinter import filedialog, messagebox, ttk
+from tkinter import font as tkfont
+
+from PIL import Image, ImageOps, ImageTk  # Pillow: deixa as imagens do tamanho certo
 
 import acessos
 import cadastro
@@ -27,16 +30,18 @@ NEGRITO = ("Segoe UI", 13, "bold")
 PEQUENA = ("Segoe UI", 11)
 TITULO = ("Segoe UI", 24, "bold")
 
-# Tudo em 16:9. Uma imagem de 1280 x 720 encaixa certinho em todos os tamanhos.
+# As capas seguem a proporção 16:9 (a mesma de uma tela de computador).
 CAPA_LARGURA = 256
 CAPA_ALTURA = 144
 FAIXA = 40  # altura da faixa "Ver detalhes"
 
-# Faz o programa achar o dados.json e a pasta imagens.
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+SEGUNDOS_PARA_CONFERIR = 3  # de quanto em quanto tempo olha se alguém mudou os dados
 
-dados = cadastro.carregar()
+dados = None
 usuario_logado = None
+tela_atual = ""   # qual tela está aberta agora
+aba_atual = ""    # qual aba da Administração está aberta
+ultima_mudanca = 0
 fotos = []  # o Tkinter apaga da tela as imagens que não estão guardadas numa lista
 
 
@@ -48,16 +53,37 @@ def texto(pai, conteudo, fonte=FONTE, cor=PRETO):
     return tk.Label(pai, text=conteudo, font=fonte, fg=cor, bg=BRANCO, justify="left")
 
 
-def botao_vermelho(pai, conteudo, comando):
-    return tk.Button(pai, text=conteudo, command=comando, font=NEGRITO, bg=VERMELHO, fg=BRANCO,
-                     activebackground="#A00C24", activeforeground=BRANCO,
-                     relief="flat", padx=22, pady=8, cursor="hand2", highlightthickness=0)
+def botao_redondo(pai, conteudo, comando, fundo, cor, fundo_mouse, largura=0, esquerda=False):
+    # O Tkinter não tem botão arredondado, então desenhamos um num Canvas.
+    if largura == 0:
+        largura = tkfont.Font(font=NEGRITO).measure(conteudo) + 44
+    altura = 42
+    botao = tk.Canvas(pai, width=largura, height=altura, bg=BRANCO,
+                      highlightthickness=0, cursor="hand2")
+
+    # Um retângulo com os cantos repetidos; o smooth=True arredonda esses cantos.
+    r = 14
+    cantos = [r, 0, largura - r, 0, largura, 0, largura, r,
+              largura, altura - r, largura, altura, largura - r, altura,
+              r, altura, 0, altura, 0, altura - r, 0, r, 0, 0]
+    forma = botao.create_polygon(cantos, smooth=True, fill=fundo)
+    if esquerda:
+        botao.create_text(18, altura // 2, text=conteudo, fill=cor, font=NEGRITO, anchor="w")
+    else:
+        botao.create_text(largura // 2, altura // 2, text=conteudo, fill=cor, font=NEGRITO)
+
+    botao.bind("<Button-1>", lambda evento: comando())
+    botao.bind("<Enter>", lambda evento: botao.itemconfig(forma, fill=fundo_mouse))
+    botao.bind("<Leave>", lambda evento: botao.itemconfig(forma, fill=fundo))
+    return botao
+
+
+def botao_vermelho(pai, conteudo, comando, largura=0):
+    return botao_redondo(pai, conteudo, comando, VERMELHO, BRANCO, "#A00C24", largura)
 
 
 def botao_cinza(pai, conteudo, comando):
-    return tk.Button(pai, text=conteudo, command=comando, font=FONTE, bg=CINZA, fg=PRETO,
-                     activebackground=LINHA, relief="flat", padx=18, pady=8,
-                     cursor="hand2", highlightthickness=0)
+    return botao_redondo(pai, conteudo, comando, CINZA, PRETO, LINHA)
 
 
 def botao_link(pai, conteudo, comando, fonte=FONTE, cor=PRETO):
@@ -69,47 +95,50 @@ def botao_link(pai, conteudo, comando, fonte=FONTE, cor=PRETO):
 
 def campo(pai, titulo, valor="", senha=False):
     texto(pai, titulo, NEGRITO).pack(anchor="w")
-    caixa = tk.Entry(pai, font=FONTE, width=36, fg=PRETO, relief="flat",
-                     highlightthickness=1, highlightbackground="#949494", highlightcolor=VERMELHO)
+    # Fundo cinza-claro no lugar da borda. A borda grossa (bd) faz o espaço
+    # interno, e a linha vermelha só aparece quando o campo está em uso.
+    caixa = tk.Entry(pai, font=FONTE, width=36, fg=PRETO, bg=CINZA, relief="flat", bd=9,
+                     highlightthickness=2, highlightbackground=CINZA, highlightcolor=VERMELHO)
     if senha:
         caixa.config(show="•")
     caixa.insert(0, valor)
-    caixa.pack(fill="x", ipady=6, pady=(4, 14))
+    caixa.pack(fill="x", pady=(6, 16))
     return caixa
 
 
-def lista(pai, linhas):
-    caixa = tk.Listbox(pai, font=FONTE, fg=PRETO, relief="flat", height=6,
-                       highlightthickness=1, highlightbackground=LINHA,
-                       selectbackground=VERMELHO_CLARO, selectforeground=PRETO, activestyle="none")
-    for linha in linhas:
-        caixa.insert("end", linha)
-    caixa.pack(fill="both", expand=True, pady=(16, 0))
+def tabela(pai):
+    # Onde ficam as linhas das listas da Administração.
+    caixa = tk.Frame(pai, bg=BRANCO)
+    caixa.pack(fill="x", pady=(20, 0))
+    caixa.columnconfigure(2, weight=1)
     return caixa
 
 
-def escolhido(caixa):
-    # Devolve a posição do item clicado na lista, ou None se nada foi clicado.
-    if len(caixa.curselection()) == 0:
-        messagebox.showinfo("Central de Acessos", "Primeiro clique em um item da lista.")
-        return None
-    return caixa.curselection()[0]
+def linha(caixa, numero, nome, detalhe, editar, remover, capa=None):
+    # Uma linha da lista: (capa) nome, detalhe em cinza e as ações na direita.
+    posicao = numero * 2
+    if capa is not None:
+        quadro(caixa, capa, 96, 54).grid(row=posicao, column=0, padx=(0, 18), pady=10)
+    texto(caixa, nome, NEGRITO).grid(row=posicao, column=1, sticky="w", pady=14)
+    texto(caixa, detalhe, cor=CINZA_TEXTO).grid(row=posicao, column=2, sticky="w", padx=(32, 0))
+    if editar is not None:
+        botao_link(caixa, "Editar", editar).grid(row=posicao, column=3, padx=(0, 28))
+    if remover is not None:
+        botao_link(caixa, "Remover", remover, cor=VERMELHO).grid(row=posicao, column=4)
+    tk.Frame(caixa, bg="#EEEEEE", height=1).grid(row=posicao + 1, column=0, columnspan=5, sticky="we")
 
 
 def foto(caminho, largura, altura):
-    # Sem imagem, aparece o ícone padrão no meio.
+    # Devolve a imagem no tamanho exato do espaço, ou None se o portal não tem imagem.
+    caminho = cadastro.caminho_da_imagem(caminho)
     if caminho == "" or not os.path.exists(caminho):
-        imagem = tk.PhotoImage(file="imagens/portal_padrao.png")
-        fotos.append(imagem)
-        return imagem
+        return None
 
-    imagem = tk.PhotoImage(file=caminho)
-    # O Tkinter só diminui imagens dividindo o tamanho por um número inteiro.
-    # Vamos aumentando o divisor até a imagem caber no espaço.
-    divisor = 1
-    while imagem.width() / divisor > largura or imagem.height() / divisor > altura:
-        divisor = divisor + 1
-    imagem = imagem.subsample(divisor)
+    # O ImageOps.fit (do Pillow) aumenta ou diminui a imagem até preencher
+    # todo o espaço. Se sobrar um pouco, corta embaixo, para o topo do
+    # sistema (onde ficam o nome e o menu) continuar aparecendo.
+    imagem = ImageOps.fit(Image.open(caminho), (largura, altura), centering=(0.5, 0))
+    imagem = ImageTk.PhotoImage(imagem)
     fotos.append(imagem)
     return imagem
 
@@ -118,19 +147,40 @@ def quadro(pai, caminho, largura, altura):
     # Um retângulo com a imagem dentro. Usado nas capas e nos prints.
     tela = tk.Canvas(pai, width=largura, height=altura, bg=VERMELHO_CLARO,
                      highlightthickness=0, cursor="hand2")
-    tela.create_image(largura // 2, altura // 2, image=foto(caminho, largura, altura))
+    imagem = foto(caminho, largura, altura)
+    if imagem is None:
+        desenhar_portal(tela, largura, altura)
+    else:
+        tela.create_image(largura // 2, altura // 2, image=imagem)
     return tela
+
+
+def desenhar_portal(tela, largura, altura):
+    # Sem imagem, desenha o símbolo da Central: um portal em arco, no meio.
+    meio = largura // 2
+    abertura = altura // 4
+    cima = altura // 3
+    chao = cima + altura * 2 // 5
+    espessura = altura // 30
+    esquerda = meio - abertura // 2
+    direita = meio + abertura // 2
+    tela.create_arc(esquerda, cima, direita, cima + abertura, start=0, extent=180,
+                    style="arc", outline=VERMELHO, width=espessura)
+    tela.create_line(esquerda, cima + abertura // 2, esquerda, chao, fill=VERMELHO, width=espessura)
+    tela.create_line(direita, cima + abertura // 2, direita, chao, fill=VERMELHO, width=espessura)
+    tela.create_line(esquerda - abertura // 4, chao, direita + abertura // 4, chao,
+                     fill=VERMELHO, width=espessura)
 
 
 def escolher_imagem():
     caminho = filedialog.askopenfilename(title="Escolha uma imagem",
-                                         filetypes=[("Imagem PNG", "*.png"), ("Imagem GIF", "*.gif")])
+                                         filetypes=[("Imagens", "*.png *.jpg *.jpeg *.gif")])
     if caminho == "":
         return ""
     try:
-        tk.PhotoImage(file=caminho)
-    except tk.TclError:
-        messagebox.showwarning("Central de Acessos", "Não consegui abrir essa imagem. Use PNG ou GIF.")
+        Image.open(caminho).verify()
+    except OSError:
+        messagebox.showwarning("Central de Acessos", "Não consegui abrir essa imagem. Use PNG ou JPG.")
         return ""
     return cadastro.copiar_imagem(caminho)
 
@@ -161,15 +211,12 @@ def montar_topo(pagina):
 
 
 def item_do_menu(pai, nome, comando, selecionado):
-    caixa = tk.Frame(pai, bg=BRANCO)
-    caixa.pack(side="left", padx=(0, 32))
-    # O item selecionado fica vermelho e com uma linha vermelha embaixo.
+    # O item aberto fica com fundo vermelho-claro e letra vermelha.
     if selecionado:
-        botao_link(caixa, nome, comando, NEGRITO, VERMELHO).pack(pady=(16, 12))
-        tk.Frame(caixa, bg=VERMELHO, height=3).pack(fill="x")
+        item = botao_redondo(pai, nome, comando, VERMELHO_CLARO, VERMELHO, VERMELHO_CLARO)
     else:
-        botao_link(caixa, nome, comando, NEGRITO).pack(pady=(16, 12))
-        tk.Frame(caixa, bg=BRANCO, height=3).pack(fill="x")
+        item = botao_redondo(pai, nome, comando, BRANCO, PRETO, CINZA)
+    item.pack(side="left", padx=(0, 8), pady=10)
 
 
 # ---------------------------------------------------------------------
@@ -177,8 +224,9 @@ def item_do_menu(pai, nome, comando, selecionado):
 # ---------------------------------------------------------------------
 
 def tela_entrada():
-    global usuario_logado
+    global usuario_logado, tela_atual
     usuario_logado = None
+    tela_atual = "entrada"
     limpar_tela()
     tk.Frame(janela, bg=VERMELHO, height=4).pack(fill="x")
 
@@ -201,7 +249,8 @@ def tela_entrada():
                 return
         erro.config(text="Usuário ou senha incorretos.")
 
-    botao_vermelho(caixa, "Entrar", entrar).pack(fill="x")
+    caixa.update_idletasks()
+    botao_vermelho(caixa, "Entrar", entrar, campo_usuario.winfo_reqwidth()).pack()
     campo_senha.bind("<Return>", lambda evento: entrar())
     campo_usuario.focus_set()
 
@@ -211,6 +260,8 @@ def tela_entrada():
 # ---------------------------------------------------------------------
 
 def tela_meus_acessos():
+    global tela_atual
+    tela_atual = "meus acessos"
     area = montar_topo("acessos")
     texto(area, "Meus acessos", TITULO).pack(anchor="w")
 
@@ -280,22 +331,28 @@ def abrir_portal(portal):
 # ---------------------------------------------------------------------
 
 def tela_detalhes(portal, print_aberto=0):
+    global tela_atual
+    tela_atual = "detalhes"
     area = montar_topo("acessos")
     botao_link(area, "‹  Voltar para Meus acessos", tela_meus_acessos, cor=VERMELHO).pack(anchor="w")
-    texto(area, portal["nome"], TITULO).pack(anchor="w", pady=(8, 12))
+    texto(area, portal["nome"], TITULO).pack(anchor="w", pady=(8, 16))
+
+    # O print grande ocupa todo o espaço que sobra ao lado da coluna da direita.
+    if janela.winfo_width() < 1300:
+        coluna = 280  # tela pequena: coluna da direita mais estreita
+    else:
+        coluna = 340
+    largura = janela.winfo_width() - 96 - coluna - 40
+    altura = largura * 9 // 16
+    altura_livre = janela.winfo_height() - 350  # topo, título e miniaturas
+    if altura > altura_livre:
+        altura = altura_livre
+        largura = altura * 16 // 9
 
     esquerda = tk.Frame(area, bg=BRANCO)
     esquerda.pack(side="left", anchor="n")
     direita = tk.Frame(area, bg=BRANCO)
-    direita.pack(side="left", anchor="n", fill="x", expand=True, padx=(32, 0))
-
-    # Print grande. Em tela grande ele fica maior.
-    if janela.winfo_width() > 1700:
-        largura = 1280
-        altura = 720
-    else:
-        largura = 640
-        altura = 360
+    direita.pack(side="left", anchor="n", padx=(40, 0))
 
     prints = portal["prints"]
     if len(prints) > 0:
@@ -305,32 +362,41 @@ def tela_detalhes(portal, print_aberto=0):
         texto(esquerda, "Ainda não há prints deste sistema.",
               cor=CINZA_TEXTO).pack(anchor="w", pady=(10, 0))
 
-    # Miniaturas: clicar numa delas troca o print grande.
+    # Miniaturas: as 4 dividem a largura do print grande. Clicar troca o print.
     miniaturas = tk.Frame(esquerda, bg=BRANCO)
-    miniaturas.pack(anchor="w", pady=(10, 0))
+    miniaturas.pack(anchor="w", pady=(12, 0))
+    largura_mini = (largura - 3 * 12 - 4 * 6) // 4
     for numero in range(len(prints)):
-        miniatura(miniaturas, portal, numero, numero == print_aberto)
+        miniatura(miniaturas, portal, numero, numero == print_aberto, largura_mini)
 
-    # Coluna da direita
-    quadro(direita, portal["capa"], CAPA_LARGURA, CAPA_ALTURA).pack(anchor="w")
+    # Coluna da direita: capa, descrição, o botão, e depois setores e endereço
+    quadro(direita, portal["capa"], coluna, coluna * 9 // 16).pack(anchor="w")
     descricao = texto(direita, portal["descricao"])
-    descricao.config(wraplength=CAPA_LARGURA)
-    descricao.pack(anchor="w", pady=(16, 16))
+    descricao.config(wraplength=coluna)
+    descricao.pack(anchor="w", pady=(18, 20))
+    botao_vermelho(direita, "Abrir portal", lambda: abrir_portal(portal), coluna).pack(anchor="w", pady=(0, 24))
+
+    texto(direita, "Liberado para", PEQUENA, CINZA_TEXTO).pack(anchor="w")
+    setores = texto(direita, ", ".join(portal["setores"]))
+    setores.config(wraplength=coluna)
+    setores.pack(anchor="w", pady=(2, 14))
     texto(direita, "Endereço", PEQUENA, CINZA_TEXTO).pack(anchor="w")
-    endereco = texto(direita, portal["endereco"], PEQUENA)
-    endereco.config(wraplength=CAPA_LARGURA)
-    endereco.pack(anchor="w")
-    botao_vermelho(direita, "Abrir portal", lambda: abrir_portal(portal)).pack(anchor="w", pady=(24, 0))
+    endereco = texto(direita, portal["endereco"])
+    endereco.config(wraplength=coluna)
+    endereco.pack(anchor="w", pady=(2, 0))
 
 
-def miniatura(pai, portal, numero, aberto):
-    mini = quadro(pai, portal["prints"][numero], 128, 72)
+def miniatura(pai, portal, numero, aberto, largura):
+    # Uma moldura de 3 pixels em volta. Fica vermelha no print que está aberto.
     if aberto:
-        mini.config(highlightthickness=3, highlightbackground=VERMELHO)
+        cor = VERMELHO
     else:
-        mini.config(highlightthickness=3, highlightbackground=BRANCO)
+        cor = BRANCO
+    moldura = tk.Frame(pai, bg=cor, padx=3, pady=3)
+    moldura.pack(side="left", padx=(0, 12))
+    mini = quadro(moldura, portal["prints"][numero], largura, largura * 9 // 16)
     mini.bind("<Button-1>", lambda evento: tela_detalhes(portal, numero))
-    mini.pack(side="left", padx=(0, 8))
+    mini.pack()
 
 
 # ---------------------------------------------------------------------
@@ -338,50 +404,67 @@ def miniatura(pai, portal, numero, aberto):
 # ---------------------------------------------------------------------
 
 def tela_administracao(aba="Portais"):
+    global tela_atual, aba_atual
+    tela_atual = "administração"
+    aba_atual = aba
     area = montar_topo("admin")
-    abas = tk.Frame(area, bg=BRANCO)
-    abas.pack(anchor="w")
-    item_do_menu(abas, "Portais", lambda: tela_administracao("Portais"), aba == "Portais")
-    item_do_menu(abas, "Setores", lambda: tela_administracao("Setores"), aba == "Setores")
-    item_do_menu(abas, "Funcionários", lambda: tela_administracao("Funcionários"), aba == "Funcionários")
-    tk.Frame(area, bg=LINHA, height=1).pack(fill="x", pady=(0, 24))
 
+    # Menu do lado esquerdo
+    menu = tk.Frame(area, bg=BRANCO)
+    menu.pack(side="left", anchor="n", padx=(0, 48))
+    for nome in ["Portais", "Setores", "Funcionários"]:
+        item_lateral(menu, nome, aba == nome)
+
+    conteudo = tk.Frame(area, bg=BRANCO)
+    conteudo.pack(side="left", anchor="n", fill="both", expand=True)
     if aba == "Portais":
-        aba_portais(area)
+        aba_portais(conteudo)
     elif aba == "Setores":
-        aba_setores(area)
+        aba_setores(conteudo)
     else:
-        aba_funcionarios(area)
+        aba_funcionarios(conteudo)
+
+
+def item_lateral(menu, nome, selecionado):
+    if selecionado:
+        item = botao_redondo(menu, nome, lambda: tela_administracao(nome),
+                             VERMELHO_CLARO, VERMELHO, VERMELHO_CLARO, 200, esquerda=True)
+    else:
+        item = botao_redondo(menu, nome, lambda: tela_administracao(nome),
+                             BRANCO, PRETO, CINZA, 200, esquerda=True)
+    item.pack(pady=(0, 6))
+
+
+def cabecalho(conteudo, titulo, botao, comando):
+    # Título da aba com o botão principal ao lado.
+    topo = tk.Frame(conteudo, bg=BRANCO)
+    topo.pack(fill="x")
+    texto(topo, titulo, TITULO).pack(side="left")
+    if botao != "":
+        botao_vermelho(topo, botao, comando).pack(side="right")
 
 
 # ----- Portais -----
 
-def aba_portais(area):
-    botoes = tk.Frame(area, bg=BRANCO)
-    botoes.pack(anchor="w")
-    linhas = []
-    for portal in dados["portais"]:
-        linhas.append("  " + portal["nome"] + "     ·     " + ", ".join(portal["setores"]))
+def aba_portais(conteudo):
+    cabecalho(conteudo, "Portais", "Novo portal", lambda: tela_portal(None))
+    caixa = tabela(conteudo)
+    for numero in range(len(dados["portais"])):
+        linha_portal(caixa, numero)
 
-    def editar():
-        numero = escolhido(caixa)
-        if numero is not None:
-            tela_portal(numero)
 
-    def remover():
-        numero = escolhido(caixa)
-        if numero is None:
-            return
-        nome = dados["portais"][numero]["nome"]
-        if messagebox.askyesno("Remover portal", "Remover " + nome + "?\nEle some para todos os setores."):
-            dados["portais"].pop(numero)
-            cadastro.salvar(dados)
-            tela_administracao("Portais")
+def linha_portal(caixa, numero):
+    portal = dados["portais"][numero]
+    linha(caixa, numero, portal["nome"], ", ".join(portal["setores"]),
+          lambda: tela_portal(numero), lambda: remover_portal(numero), portal["capa"])
 
-    botao_vermelho(botoes, "Novo portal", lambda: tela_portal(None)).pack(side="left")
-    botao_cinza(botoes, "Editar", editar).pack(side="left", padx=12)
-    botao_cinza(botoes, "Remover", remover).pack(side="left")
-    caixa = lista(area, linhas)
+
+def remover_portal(numero):
+    nome = dados["portais"][numero]["nome"]
+    if messagebox.askyesno("Remover portal", "Remover " + nome + "?\nEle some para todos os setores."):
+        dados["portais"].pop(numero)
+        cadastro.salvar(dados)
+        tela_administracao("Portais")
 
 
 def tela_portal(numero):
@@ -392,6 +475,8 @@ def tela_portal(numero):
     else:
         portal = dados["portais"][numero]
 
+    global tela_atual
+    tela_atual = "formulário"
     area = montar_topo("admin")
     if numero is None:
         texto(area, "Novo portal", TITULO).pack(anchor="w", pady=(0, 20))
@@ -403,54 +488,59 @@ def tela_portal(numero):
     direita = tk.Frame(area, bg=BRANCO)
     direita.pack(side="left", anchor="n", padx=(56, 0))
 
-    # Coluna da esquerda: textos e capa
+    # As imagens escolhidas ficam guardadas aqui até a pessoa clicar em Salvar.
+    imagens = {"capa": portal["capa"], "prints": list(portal["prints"])}
+
+    # Coluna da esquerda: textos e setores
     campo_nome = campo(esquerda, "Nome", portal["nome"])
     campo_endereco = campo(esquerda, "Endereço (começa com http:// ou https://)", portal["endereco"])
     campo_descricao = campo(esquerda, "O que o sistema faz (uma frase)", portal["descricao"])
-    campo_capa = campo(esquerda, "Capa (imagem PNG de 1280 x 720)", portal["capa"])
+
+    texto(esquerda, "Setores que veem este portal", NEGRITO).pack(anchor="w")
+    marcados = {}
+    for setor in dados["setores"]:
+        marcado = tk.BooleanVar(value=setor in portal["setores"])
+        tk.Checkbutton(esquerda, text=setor, variable=marcado, font=FONTE, bg=BRANCO,
+                       activebackground=BRANCO, highlightthickness=0, bd=0).pack(anchor="w", pady=1)
+        marcados[setor] = marcado
+
+    # Coluna da direita: capa e prints
+    texto(direita, "Capa", NEGRITO).pack(anchor="w")
+    area_capa = tk.Frame(direita, bg=BRANCO)
+    area_capa.pack(anchor="w", pady=(6, 20))
+
+    def desenhar_capa():
+        for parte in area_capa.winfo_children():
+            parte.destroy()
+        quadro(area_capa, imagens["capa"], 192, 108).pack(side="left")
+        botao_cinza(area_capa, "Escolher capa", trocar_capa).pack(side="left", padx=16)
 
     def trocar_capa():
         caminho = escolher_imagem()
         if caminho != "":
-            campo_capa.delete(0, "end")
-            campo_capa.insert(0, caminho)
+            imagens["capa"] = caminho
+            desenhar_capa()
 
-    botao_cinza(esquerda, "Escolher capa…", trocar_capa).pack(anchor="w")
+    texto(direita, "Prints do sistema (até 4)", NEGRITO).pack(anchor="w")
+    area_prints = tk.Frame(direita, bg=BRANCO)
+    area_prints.pack(anchor="w", pady=(6, 0))
 
-    # Coluna da direita: setores e prints
-    texto(direita, "Setores que veem este portal", NEGRITO).pack(anchor="w")
-    marcados = {}
-    for setor in dados["setores"]:
-        marcado = tk.BooleanVar(value=setor in portal["setores"])
-        tk.Checkbutton(direita, text=setor, variable=marcado, font=FONTE, bg=BRANCO,
-                       activebackground=BRANCO, highlightthickness=0, bd=0).pack(anchor="w")
-        marcados[setor] = marcado
-
-    texto(direita, "Prints do sistema (até 4, PNG de 1280 x 720)", NEGRITO).pack(anchor="w", pady=(18, 0))
-    caixa_prints = tk.Listbox(direita, font=PEQUENA, height=4, width=42, relief="flat",
-                              highlightthickness=1, highlightbackground="#949494",
-                              selectbackground=VERMELHO_CLARO, selectforeground=PRETO)
-    for caminho in portal["prints"]:
-        caixa_prints.insert("end", caminho)
-    caixa_prints.pack(anchor="w", pady=(4, 8))
+    def desenhar_prints():
+        for parte in area_prints.winfo_children():
+            parte.destroy()
+        for numero_print in range(len(imagens["prints"])):
+            print_do_formulario(area_prints, imagens["prints"], numero_print, desenhar_prints)
+        if len(imagens["prints"]) < 4:
+            botao_cinza(area_prints, "Adicionar print", adicionar_print).pack(side="left", anchor="n")
 
     def adicionar_print():
-        if caixa_prints.size() == 4:
-            messagebox.showinfo("Central de Acessos", "Cada portal pode ter até 4 prints.")
-            return
         caminho = escolher_imagem()
         if caminho != "":
-            caixa_prints.insert("end", caminho)
+            imagens["prints"].append(caminho)
+            desenhar_prints()
 
-    def remover_print():
-        numero_print = escolhido(caixa_prints)
-        if numero_print is not None:
-            caixa_prints.delete(numero_print)
-
-    botoes_prints = tk.Frame(direita, bg=BRANCO)
-    botoes_prints.pack(anchor="w")
-    botao_cinza(botoes_prints, "Adicionar print…", adicionar_print).pack(side="left")
-    botao_cinza(botoes_prints, "Remover print", remover_print).pack(side="left", padx=12)
+    desenhar_capa()
+    desenhar_prints()
 
     def salvar():
         endereco = campo_endereco.get().strip()
@@ -469,8 +559,8 @@ def tela_portal(numero):
             messagebox.showwarning("Faltam os setores", "Marque pelo menos um setor.")
         else:
             novo = {"nome": campo_nome.get().strip(), "endereco": endereco,
-                    "descricao": campo_descricao.get().strip(), "capa": campo_capa.get().strip(),
-                    "prints": list(caixa_prints.get(0, "end")), "setores": setores}
+                    "descricao": campo_descricao.get().strip(), "capa": imagens["capa"],
+                    "prints": imagens["prints"], "setores": setores}
             if numero is None:
                 dados["portais"].append(novo)
             else:
@@ -479,92 +569,108 @@ def tela_portal(numero):
             tela_administracao("Portais")
 
     fim = tk.Frame(direita, bg=BRANCO)
-    fim.pack(anchor="w", pady=(32, 0))
+    fim.pack(anchor="w", pady=(40, 0))
     botao_vermelho(fim, "Salvar portal", salvar).pack(side="left")
     botao_cinza(fim, "Cancelar", lambda: tela_administracao("Portais")).pack(side="left", padx=12)
     campo_nome.focus_set()
 
 
+def print_do_formulario(pai, prints, numero, redesenhar):
+    caixa = tk.Frame(pai, bg=BRANCO)
+    caixa.pack(side="left", padx=(0, 12))
+    quadro(caixa, prints[numero], 96, 54).pack()
+
+    def tirar():
+        prints.pop(numero)
+        redesenhar()
+
+    botao_link(caixa, "Tirar", tirar, PEQUENA, VERMELHO).pack(anchor="w", pady=(4, 0))
+
+
 # ----- Setores -----
 
-def aba_setores(area):
-    linha = tk.Frame(area, bg=BRANCO)
-    linha.pack(anchor="w")
-    novo_setor = tk.Entry(linha, font=FONTE, width=26, relief="flat", highlightthickness=1,
-                          highlightbackground="#949494", highlightcolor=VERMELHO)
-    novo_setor.pack(side="left", ipady=7, padx=(0, 12))
+def aba_setores(conteudo):
+    cabecalho(conteudo, "Setores", "", None)
 
-    def adicionar():
-        nome = novo_setor.get().strip()
-        if nome == "":
-            messagebox.showinfo("Central de Acessos", "Escreva o nome do setor ao lado do botão.")
-        elif nome in dados["setores"]:
-            messagebox.showinfo("Central de Acessos", "Esse setor já existe.")
-        else:
-            dados["setores"].append(nome)
-            cadastro.salvar(dados)
-            tela_administracao("Setores")
+    novo = tk.Frame(conteudo, bg=BRANCO)
+    novo.pack(anchor="w", pady=(20, 0))
+    campo_setor = tk.Entry(novo, font=FONTE, width=28, fg=PRETO, bg=CINZA, relief="flat", bd=9,
+                           highlightthickness=2, highlightbackground=CINZA, highlightcolor=VERMELHO)
+    campo_setor.pack(side="left", padx=(0, 12))
+    botao_vermelho(novo, "Adicionar setor", lambda: adicionar_setor(campo_setor.get())).pack(side="left")
 
-    def remover():
-        numero = escolhido(caixa)
-        if numero is None:
+    caixa = tabela(conteudo)
+    for numero in range(len(dados["setores"])):
+        linha_setor(caixa, numero)
+
+
+def linha_setor(caixa, numero):
+    setor = dados["setores"][numero]
+    quantos = 0
+    for usuario in dados["usuarios"]:
+        if usuario["setor"] == setor:
+            quantos = quantos + 1
+    if quantos == 1:
+        detalhe = "1 funcionário"
+    else:
+        detalhe = str(quantos) + " funcionários"
+    linha(caixa, numero, setor, detalhe, None, lambda: remover_setor(numero))
+
+
+def adicionar_setor(nome):
+    nome = nome.strip()
+    if nome == "":
+        messagebox.showinfo("Central de Acessos", "Escreva o nome do setor ao lado do botão.")
+    elif nome in dados["setores"]:
+        messagebox.showinfo("Central de Acessos", "Esse setor já existe.")
+    else:
+        dados["setores"].append(nome)
+        cadastro.salvar(dados)
+        tela_administracao("Setores")
+
+
+def remover_setor(numero):
+    setor = dados["setores"][numero]
+    for usuario in dados["usuarios"]:
+        if usuario["setor"] == setor:
+            messagebox.showinfo("Central de Acessos", "Ainda tem funcionários em " + setor +
+                                ".\nMude o setor deles antes de remover.")
             return
-        setor = dados["setores"][numero]
-        for usuario in dados["usuarios"]:
-            if usuario["setor"] == setor:
-                messagebox.showinfo("Central de Acessos", "Ainda tem funcionários em " + setor +
-                                    ".\nMude o setor deles antes de remover.")
-                return
-        if messagebox.askyesno("Remover setor", "Remover o setor " + setor + "?"):
-            dados["setores"].remove(setor)
-            for portal in dados["portais"]:
-                if setor in portal["setores"]:
-                    portal["setores"].remove(setor)
-            cadastro.salvar(dados)
-            tela_administracao("Setores")
-
-    botao_vermelho(linha, "Adicionar setor", adicionar).pack(side="left")
-    botao_cinza(linha, "Remover setor", remover).pack(side="left", padx=12)
-    linhas = []
-    for setor in dados["setores"]:
-        linhas.append("  " + setor)
-    caixa = lista(area, linhas)
+    if messagebox.askyesno("Remover setor", "Remover o setor " + setor + "?"):
+        dados["setores"].remove(setor)
+        for portal in dados["portais"]:
+            if setor in portal["setores"]:
+                portal["setores"].remove(setor)
+        cadastro.salvar(dados)
+        tela_administracao("Setores")
 
 
 # ----- Funcionários -----
 
-def aba_funcionarios(area):
-    botoes = tk.Frame(area, bg=BRANCO)
-    botoes.pack(anchor="w")
-    linhas = []
-    for usuario in dados["usuarios"]:
-        if usuario["admin"]:
-            setor = "Administrador"
-        else:
-            setor = usuario["setor"]
-        linhas.append("  " + usuario["nome"] + "     ·     " + setor + "     ·     usuário: " + usuario["usuario"])
+def aba_funcionarios(conteudo):
+    cabecalho(conteudo, "Funcionários", "Novo funcionário", lambda: tela_funcionario(None))
+    caixa = tabela(conteudo)
+    for numero in range(len(dados["usuarios"])):
+        linha_funcionario(caixa, numero)
 
-    def editar():
-        numero = escolhido(caixa)
-        if numero is not None:
-            tela_funcionario(numero)
 
-    def remover():
-        numero = escolhido(caixa)
-        if numero is None:
-            return
-        usuario = dados["usuarios"][numero]
-        if usuario["admin"]:
-            messagebox.showinfo("Central de Acessos", "A conta do administrador não pode ser removida.")
-        elif messagebox.askyesno("Remover funcionário", "Remover " + usuario["nome"] + "?"):
-            dados["usuarios"].pop(numero)
-            cadastro.salvar(dados)
-            tela_administracao("Funcionários")
+def linha_funcionario(caixa, numero):
+    usuario = dados["usuarios"][numero]
+    if usuario["admin"]:
+        detalhe = "Administrador  —  " + usuario["usuario"]
+        remover = None  # o administrador não pode ser removido
+    else:
+        detalhe = usuario["setor"] + "  —  " + usuario["usuario"]
+        remover = lambda: remover_funcionario(numero)
+    linha(caixa, numero, usuario["nome"], detalhe, lambda: tela_funcionario(numero), remover)
 
-    botao_vermelho(botoes, "Novo funcionário", lambda: tela_funcionario(None)).pack(side="left")
-    botao_cinza(botoes, "Editar", editar).pack(side="left", padx=12)
-    botao_cinza(botoes, "Remover", remover).pack(side="left")
-    caixa = lista(area, linhas)
+
+def remover_funcionario(numero):
+    usuario = dados["usuarios"][numero]
+    if messagebox.askyesno("Remover funcionário", "Remover " + usuario["nome"] + "?"):
+        dados["usuarios"].pop(numero)
+        cadastro.salvar(dados)
+        tela_administracao("Funcionários")
 
 
 def tela_funcionario(numero):
@@ -573,6 +679,8 @@ def tela_funcionario(numero):
     else:
         usuario = dados["usuarios"][numero]
 
+    global tela_atual
+    tela_atual = "formulário"
     area = montar_topo("admin")
     if numero is None:
         texto(area, "Novo funcionário", TITULO).pack(anchor="w", pady=(0, 20))
@@ -592,7 +700,7 @@ def tela_funcionario(numero):
         texto(formulario, "O administrador não tem setor: ele vê todos os portais.",
               cor=CINZA_TEXTO).pack(anchor="w", pady=(4, 0))
     else:
-        escolha.pack(fill="x", ipady=4, pady=(4, 0))
+        escolha.pack(fill="x", ipady=6, pady=(6, 0))
 
     def salvar():
         login = campo_usuario.get().strip().lower()
@@ -622,10 +730,53 @@ def tela_funcionario(numero):
             tela_administracao("Funcionários")
 
     fim = tk.Frame(formulario, bg=BRANCO)
-    fim.pack(anchor="w", pady=(28, 0))
+    fim.pack(anchor="w", pady=(32, 0))
     botao_vermelho(fim, "Salvar funcionário", salvar).pack(side="left")
     botao_cinza(fim, "Cancelar", lambda: tela_administracao("Funcionários")).pack(side="left", padx=12)
     campo_nome.focus_set()
+
+
+# ---------------------------------------------------------------------
+# 5. AO VIVO: mostra as mudanças feitas por outros computadores
+# ---------------------------------------------------------------------
+
+def acompanhar_mudancas():
+    global dados, usuario_logado, ultima_mudanca
+
+    # Quem está preenchendo um formulário não pode perder o que digitou,
+    # então só atualizamos depois que a pessoa sair dele.
+    if tela_atual != "formulário" and cadastro.quando_mudou() != ultima_mudanca:
+        try:
+            novos_dados = cadastro.carregar()
+        except ValueError:
+            novos_dados = None  # o arquivo estava sendo salvo; tenta de novo daqui a pouco
+
+        if novos_dados is not None:
+            dados = novos_dados
+            ultima_mudanca = cadastro.quando_mudou()
+            atualizar_tela()
+
+    janela.after(SEGUNDOS_PARA_CONFERIR * 1000, acompanhar_mudancas)
+
+
+def atualizar_tela():
+    global usuario_logado
+    if usuario_logado is None:
+        return
+
+    # Procura a pessoa de novo nos dados novos: o setor dela pode ter mudado.
+    login = usuario_logado["usuario"]
+    usuario_logado = None
+    for usuario in dados["usuarios"]:
+        if usuario["usuario"] == login:
+            usuario_logado = usuario
+
+    if usuario_logado is None:
+        tela_entrada()  # a conta foi removida
+    elif tela_atual == "meus acessos":
+        tela_meus_acessos()
+    elif tela_atual == "administração":
+        tela_administracao(aba_atual)
 
 
 # ---------------------------------------------------------------------
@@ -640,5 +791,15 @@ try:
     janela.state("zoomed")  # maximizada no Windows
 except tk.TclError:
     janela.attributes("-zoomed", True)  # no Linux o comando é outro
-tela_entrada()
-janela.mainloop()
+
+try:
+    dados = cadastro.carregar()
+    ultima_mudanca = cadastro.quando_mudou()
+except OSError:
+    messagebox.showerror("Central de Acessos", "Não consegui abrir a pasta dos dados:\n" + cadastro.PASTA_DADOS +
+                         "\n\nConfira se o computador está na rede e se o caminho em pasta_dados.txt está certo.")
+    janela.destroy()
+else:
+    tela_entrada()
+    acompanhar_mudancas()
+    janela.mainloop()

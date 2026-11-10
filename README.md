@@ -30,13 +30,37 @@ O cadastro fica salvo no computador entre as execuções. Cada sistema de destin
 
 1. Instale o [Python](https://www.python.org/downloads/) com o componente **Tcl/Tk and IDLE**.
 2. Baixe o repositório como ZIP e extraia a pasta inteira.
-3. Abra **`abrir_central.bat`**. A Central abre maximizada, na tela de entrada.
+3. Abra **`abrir_central.bat`**. Na primeira vez ele instala o **Pillow**, a biblioteca que ajusta o tamanho das imagens (precisa de internet). Depois a Central abre maximizada, na tela de entrada.
 
 Se preferir o terminal, rode na pasta do projeto:
 
 ```powershell
+py -m pip install -r requirements.txt
 py central.py
 ```
+
+### Gerar o executável (.exe)
+
+Dê dois cliques em **`gerar_executavel.bat`**. Ele instala o PyInstaller e cria **`dist\CentralDeAcessos.exe`**, que abre sem precisar do Python instalado. O `.exe` guarda o `dados.json` e a pasta `imagens/` na mesma pasta em que ele estiver, então copie o `.exe` para a pasta onde os dados devem ficar.
+
+O PyInstaller só gera `.exe` rodando no Windows. Por isso esse passo precisa ser feito num computador com Windows.
+
+### Ao vivo para várias pessoas
+
+Para todo mundo ver as mesmas informações, os dados ficam numa **pasta compartilhada da rede** da empresa:
+
+1. Crie uma pasta na rede que todos consigam abrir, por exemplo `\\servidor\central`.
+2. Ao lado do `central.py` (ou do `.exe`) de cada computador, crie o arquivo **`pasta_dados.txt`** com o caminho dessa pasta numa linha só:
+   ```
+   \\servidor\central
+   ```
+3. Abra a Central normalmente em cada computador.
+
+A cada 3 segundos, cada Central confere se o `dados.json` da pasta mudou. Se mudou, recarrega e redesenha a tela. Quando o administrador libera um portal, ele aparece para quem está conectado sem precisar fechar nada. Quem está preenchendo um formulário não é interrompido: a tela só atualiza quando a pessoa sai dele.
+
+Sem o `pasta_dados.txt`, os dados ficam na pasta do próprio programa, como antes.
+
+> Deixe **uma pessoa administrando por vez**. Se dois administradores salvarem ao mesmo tempo, o último a salvar sobrescreve o outro.
 
 Na primeira execução, o programa cria o `dados.json` com os setores, as contas abaixo e seis sistemas públicos já cadastrados: Site da Portonave, Portal Único Siscomex, MarineTraffic, Tábuas de maré, Portal da NF-e e eSocial. Eles ainda não têm capa nem prints; isso se adiciona pela Administração.
 
@@ -55,9 +79,9 @@ As contas de teste podem ser apagadas na aba **Funcionários** depois da apresen
 
 ### Capas e prints
 
-Use **PNG de 1280 × 720**. Nesse tamanho a imagem encaixa sem bordas na capa (256 × 144), no print grande (640 × 360, ou 1280 × 720 em tela grande) e nas miniaturas (128 × 72). No Windows, **Windows + Shift + S** recorta a tela, e o recorte pode ser salvo como PNG. O Tkinter não abre JPG sem bibliotecas extras.
+Aceita **PNG ou JPG** de qualquer tamanho. O Pillow aumenta ou diminui a imagem até ela preencher todo o espaço. Se a proporção for diferente de 16:9, ele corta um pouco da parte de baixo, para o topo do sistema (nome e menu) continuar aparecendo. Prints da tela inteira, tirados com **Windows + Shift + S**, ficam bons.
 
-As imagens escolhidas são copiadas para a pasta `imagens/`, então o portal não perde a capa se o arquivo original for apagado.
+As imagens escolhidas são copiadas para a pasta `imagens/`, junto com os dados. Assim o portal não perde a capa se o arquivo original for apagado, e todos os computadores enxergam a mesma imagem.
 
 ## Demonstração
 
@@ -75,8 +99,8 @@ O [roteiro completo da apresentação](ROTEIRO_APRESENTACAO.md) inclui a ordem d
 | Arquivo | Responsabilidade |
 | --- | --- |
 | [`acessos.py`](acessos.py) | Filtra os portais pelo setor do funcionário. É o melhor ponto para começar a leitura. |
-| [`cadastro.py`](cadastro.py) | Carrega e salva os cadastros em `dados.json` e copia as imagens para `imagens/`. |
-| [`central.py`](central.py) | Monta as telas, liga os botões às ações e abre os endereços no navegador. Está dividido em blocos: Entrada, Meus acessos, Detalhes e Administração. |
+| [`cadastro.py`](cadastro.py) | Acha a pasta dos dados (local ou da rede), carrega e salva o `dados.json` e copia as imagens para `imagens/`. |
+| [`central.py`](central.py) | Monta as telas, liga os botões às ações e abre os endereços no navegador. Está dividido em blocos: Entrada, Meus acessos, Detalhes, Administração e Ao vivo. |
 
 O filtro percorre os portais e inclui cada atalho quando o setor da pessoa está entre os liberados:
 
@@ -94,30 +118,41 @@ else:
     abrir_portal(portal)  # clicou na imagem
 ```
 
-E abrir o portal usa a biblioteca padrão do Python:
+Abrir o portal usa a biblioteca padrão do Python:
 
 ```python
 webbrowser.open(portal["endereco"])
 ```
 
-Além de `if`, `elif` e `else`, o código usa `def`, listas, dicionários, `for` e `lambda` (nos botões: "quando clicar, rode isto").
+E o "ao vivo" é uma função que se chama de novo a cada 3 segundos com `janela.after`:
+
+```python
+if tela_atual != "formulário" and cadastro.quando_mudou() != ultima_mudanca:
+    dados = cadastro.carregar()
+    atualizar_tela()
+janela.after(SEGUNDOS_PARA_CONFERIR * 1000, acompanhar_mudancas)
+```
+
+Além de `if`, `elif` e `else`, o código usa `def`, listas, dicionários, `for` e `lambda` (nos botões: "quando clicar, rode isto"). Os botões arredondados são desenhados num `Canvas`, porque o Tkinter não tem botão com canto redondo.
 
 ## Testes
 
 O programa foi aberto e as telas foram controladas por um roteiro de teste. Tudo passou:
 
-- **Cadastro:** um portal com capa e 4 prints, liberado só para o Financeiro, é salvo no `dados.json`. O 5º print é recusado e as imagens vão para `imagens/`.
+- **Cadastro:** um portal com capa e 4 prints, liberado só para o Financeiro, é salvo no `dados.json`. Com 4 prints o botão de adicionar some, "Tirar" libera de novo, e as imagens vão para `imagens/`.
+- **Imagens:** um print de 1440 × 900 (proporção diferente) preenche o espaço todo, sem bordas.
 - **Financeiro:** a conta vê o portal. Nome e capa abrem o endereço, e a faixa aparece e some com o mouse. A faixa leva aos detalhes sem abrir o navegador, as miniaturas trocam o print grande e **Abrir portal** abre o endereço.
 - **Operações:** não vê o portal até o administrador liberar. Depois de liberado, vê.
 - **Persistência:** depois de fechar e reabrir, portal, permissões e funcionários novos continuam salvos.
 - **Outros casos:** senha errada é recusada, funcionário não vê a Administração, e uma conta nova do Comercial vê só os sistemas do Comercial.
+- **Ao vivo:** dois programas abertos usando a mesma pasta. O admin liberou um portal num deles e ele apareceu sozinho no outro. O admin removeu uma conta e ela voltou sozinha para a tela de entrada. Um formulário aberto não foi interrompido, e a mudança apareceu logo depois de sair dele.
 - **Telas:** conferidas em 1024 × 650 e em 1920 × 1080.
 
-As capturas foram tiradas no Linux, com fonte parecida com a Segoe UI. As imagens com "TESTE" escrito foram feitas só para o teste. Os endereços dos seis sistemas iniciais não puderam ser abertos no ambiente de teste e devem ser conferidos antes da apresentação.
+As capturas foram tiradas no Linux, com fonte parecida com a Segoe UI. As imagens com "TESTE" escrito foram feitas só para o teste. Os endereços dos seis sistemas iniciais não puderam ser abertos no ambiente de teste e devem ser conferidos antes da apresentação. O `gerar_executavel.bat` não foi testado, porque o `.exe` só pode ser gerado no Windows.
 
 ## Escopo acadêmico
 
-Esta versão roda localmente. O filtro por setor organiza a **visibilidade dos atalhos na Central**; quem souber um endereço ainda consegue abri-lo direto no navegador, e por isso o login de cada sistema continua valendo. As contas são gravadas em texto no arquivo local `dados.json`. Para uma implantação interna, a autenticação e a gestão de contas precisariam ser avaliadas com a equipe de TI da empresa.
+Esta versão roda no computador de cada pessoa, com os dados numa pasta local ou compartilhada. O filtro por setor organiza a **visibilidade dos atalhos na Central**; quem souber um endereço ainda consegue abri-lo direto no navegador, e por isso o login de cada sistema continua valendo. As contas são gravadas em texto no arquivo `dados.json`, e quem tiver acesso à pasta consegue ler esse arquivo. Para uma implantação interna, a autenticação e a gestão de contas precisariam ser avaliadas com a equipe de TI da empresa.
 
 Em 1024 × 650 a tela Meus acessos mostra 6 capas; com mais portais seria preciso adicionar rolagem. O vermelho `#C8102E` é provisório e fica na variável `VERMELHO`, no começo do `central.py`.
 

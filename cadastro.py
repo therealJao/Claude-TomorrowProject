@@ -5,8 +5,24 @@
 import json
 import os
 import shutil
+import sys
+import time
 
-ARQUIVO = "dados.json"
+# A pasta onde o programa está. No executável (.exe) é a pasta do .exe.
+if getattr(sys, "frozen", False):
+    PASTA_DO_PROGRAMA = os.path.dirname(sys.executable)
+else:
+    PASTA_DO_PROGRAMA = os.path.dirname(os.path.abspath(__file__))
+
+# Para várias pessoas verem os mesmos dados ao vivo, escreva no arquivo
+# pasta_dados.txt o caminho de uma pasta da rede, por exemplo: \\servidor\central
+# Sem esse arquivo, os dados ficam na mesma pasta do programa.
+PASTA_DADOS = PASTA_DO_PROGRAMA
+if os.path.exists(os.path.join(PASTA_DO_PROGRAMA, "pasta_dados.txt")):
+    with open(os.path.join(PASTA_DO_PROGRAMA, "pasta_dados.txt"), encoding="utf-8") as arquivo:
+        PASTA_DADOS = arquivo.read().strip()
+
+ARQUIVO = os.path.join(PASTA_DADOS, "dados.json")
 
 
 def carregar():
@@ -19,17 +35,46 @@ def carregar():
 
 
 def salvar(dados):
-    with open(ARQUIVO, "w", encoding="utf-8") as arquivo:
+    # Primeiro grava num arquivo temporário e depois troca de uma vez.
+    # Assim outro computador nunca lê o dados.json pela metade.
+    temporario = ARQUIVO + ".tmp"
+    with open(temporario, "w", encoding="utf-8") as arquivo:
         json.dump(dados, arquivo, ensure_ascii=False, indent=2)
+
+    # Se outro computador estiver lendo o arquivo nessa hora, o Windows não
+    # deixa trocar. Então esperamos um pouquinho e tentamos de novo.
+    for tentativa in range(10):
+        try:
+            os.replace(temporario, ARQUIVO)
+            return
+        except PermissionError:
+            time.sleep(0.2)
+    os.replace(temporario, ARQUIVO)
+
+
+def quando_mudou():
+    # A hora da última vez que alguém salvou o dados.json.
+    if not os.path.exists(ARQUIVO):
+        return 0
+    return os.path.getmtime(ARQUIVO)
 
 
 def copiar_imagem(caminho):
-    # Guarda uma cópia na pasta imagens. Assim a imagem não some
-    # se alguém apagar ou mover o arquivo original.
-    destino = "imagens/" + os.path.basename(caminho)
+    # Guarda uma cópia na pasta imagens, junto com os dados. Assim todos os
+    # computadores enxergam a imagem, e ela não some se o original for apagado.
+    os.makedirs(os.path.join(PASTA_DADOS, "imagens"), exist_ok=True)
+    nome = "imagens/" + os.path.basename(caminho)
+    destino = os.path.join(PASTA_DADOS, nome)
     if os.path.abspath(caminho) != os.path.abspath(destino):
         shutil.copy(caminho, destino)
-    return destino
+    return nome
+
+
+def caminho_da_imagem(nome):
+    # No dados.json a imagem fica como "imagens/capa.png". Aqui vira o caminho completo.
+    if nome == "":
+        return ""
+    return os.path.join(PASTA_DADOS, nome)
 
 
 def dados_iniciais():
