@@ -1,142 +1,90 @@
 # Central de Acessos
 
-Um programa para Windows, feito em Python com Tkinter, que reúne num só lugar os atalhos para os sistemas da empresa.
+**Um catálogo de atalhos para os sites e sistemas que cada setor usa no trabalho.**
 
-Pense num quarto com portais. A empresa coloca um portal no quarto, e ele leva ao site ou sistema que já existe no endereço cadastrado. Cada funcionário vê só os portais liberados para o seu setor.
+Projeto acadêmico desenvolvido no SENAI para apresentação à Portonave. A proposta parte de um problema simples: quando cada ferramenta fica em um endereço diferente, encontrar o portal certo toma tempo. A Central reúne esses endereços numa tela e mostra a cada pessoa os atalhos liberados para o seu setor.
 
-Ao clicar num portal, a Central abre o endereço no navegador, igual a clicar num link. O login e as permissões continuam sendo do sistema de destino. A Central só decide **quais atalhos cada setor enxerga**.
+[Como executar](#como-executar-no-windows) · [Como funciona](#como-funciona) · [Entenda o código](#entenda-o-código) · [Roteiro da apresentação](ROTEIRO_APRESENTACAO.md)
 
-![Tela Meus acessos](capturas/meus-acessos-maximizada.png)
+![Tela Meus acessos da Central, com os portais disponíveis para a conta do exemplo](capturas/meus-acessos-maximizada.png)
 
----
+## Como funciona
 
-## Como abrir no Windows
+A ideia é a de um quarto com portais. O administrador cadastra cada atalho com nome, endereço, descrição, imagem opcional e os setores que podem vê-lo. Na tela **Meus acessos**, o funcionário encontra os portais do próprio setor. Clicar no nome ou na imagem abre o endereço original no navegador padrão. O botão **Detalhes** mostra para que serve aquele portal.
 
-1. Instale o Python em <https://www.python.org/downloads/>. Na instalação, deixe marcada a opção **"tcl/tk and IDLE"** (ela já vem marcada).
-2. Baixe esta pasta inteira.
-3. Dê dois cliques em **`abrir_central.bat`**.
+| Quem usa | O que pode fazer |
+| --- | --- |
+| **Funcionário** | Consultar seus atalhos, ler os detalhes e abrir os destinos. |
+| **Administrador** | Cadastrar, editar e remover portais, gerenciar setores e funcionários e escolher onde cada atalho aparece. |
 
-Também dá para abrir pelo terminal, dentro da pasta:
+O cadastro fica salvo no computador entre as execuções. Cada sistema de destino continua responsável pelo seu login e pelas suas permissões.
 
-```bash
+## Como executar no Windows
+
+1. Instale o [Python](https://www.python.org/downloads/) com o componente **Tcl/Tk and IDLE**.
+2. Baixe o repositório como ZIP e extraia a pasta inteira.
+3. Abra **`abrir_central.bat`**. A Central abre maximizada, na tela de entrada.
+
+Se preferir o terminal, rode na pasta do projeto:
+
+```powershell
 py central.py
 ```
 
-A janela abre maximizada, na tela de entrada.
+<details>
+<summary><strong>Contas de exemplo para o ensaio</strong></summary>
 
-### Contas de exemplo (só para o ensaio)
+| Usuário | Senha de exemplo | Papel |
+| --- | --- | --- |
+| `admin` | `admin123` | Administração |
+| `ana` | `ana123` | Financeiro |
+| `bruno` | `bruno123` | Operações |
 
-| Usuário | Senha | Quem é |
-|---|---|---|
-| `admin` | `admin123` | Administrador: vê todos os portais e a área de Administração |
-| `ana` | `ana123` | Funcionária do Financeiro |
-| `bruno` | `bruno123` | Funcionário de Operações |
+Na primeira execução, o programa cria `dados.json` com essas contas e portais de exemplo. Os atalhos iniciais apontam para `example.com`.
 
-Os portais que vêm prontos terminam com "(exemplo)" e apontam para `example.com`, um endereço reservado para testes. A empresa troca tudo isso pela tela de Administração.
+</details>
 
----
+## Demonstração
 
-## Por qual arquivo começar a estudar
+1. Entre como administrador e cadastre um **Portal de Notas** com um endereço de ensaio. Libere o atalho apenas para o **Financeiro**.
+2. Entre com a conta do Financeiro. Abra **Detalhes**, confira a descrição e clique no portal para abrir o endereço.
+3. Entre com a conta de Operações e confira a lista desse setor.
+4. Volte à Administração, libere o mesmo portal para **Operações** e entre novamente nessa conta. Feche e reabra a Central para conferir o cadastro salvo.
 
-São só três arquivos de código. Leiam nesta ordem:
+O [roteiro completo da apresentação](ROTEIRO_APRESENTACAO.md) inclui a ordem das telas e sugestões de como explicar a lógica.
 
-| Ordem | Arquivo | O que tem | Tamanho |
-|---|---|---|---|
-| 1 | `acessos.py` | A **regra**: quais portais cada pessoa vê | 14 linhas |
-| 2 | `cadastro.py` | **Salvar e carregar** os dados no arquivo `dados.json` | 54 linhas |
-| 3 | `central.py` | **As telas**: entrada, Meus acessos, Detalhes e Administração | o maior |
+## Entenda o código
 
-O `central.py` é dividido em blocos com títulos (`1. ENTRADA`, `2. MEUS ACESSOS`, `3. ADMINISTRAÇÃO`). Dá para estudar um bloco por vez.
+**Python · Tkinter · JSON**
 
----
+| Arquivo | Responsabilidade |
+| --- | --- |
+| [`acessos.py`](acessos.py) | Filtra os portais pelo setor do funcionário. É o melhor ponto para começar a leitura. |
+| [`cadastro.py`](cadastro.py) | Carrega e salva os cadastros em `dados.json`. |
+| [`central.py`](central.py) | Monta as telas, liga os botões às ações e abre os endereços no navegador. |
 
-## O caminho de um portal (do cadastro ao navegador)
-
-Este é o ponto principal para explicar na apresentação.
-
-**1. O administrador cadastra.** Na tela de Administração ele clica em **Novo portal** e preenche nome, endereço, descrição, imagem e setores. Quem cuida disso é a função `janela_portal` em `central.py`.
-
-**2. O programa confere e salva.** Ao clicar em **Salvar portal**, a função `salvar_portal`:
-- confere com `if` se o nome foi preenchido, se o endereço começa com `http://` ou `https://` e se algum setor foi marcado;
-- monta o portal como um dicionário, por exemplo:
-  ```python
-  {"nome": "Portal de Notas", "endereco": "https://...", "descricao": "...",
-   "imagem": "", "setores": ["Financeiro"]}
-  ```
-- coloca o dicionário na lista `dados["portais"]` e chama `cadastro.salvar(dados)`, que grava tudo em **`dados.json`**.
-
-Como fica gravado no arquivo, o cadastro continua lá quando o programa fecha e abre de novo.
-
-**3. A regra filtra por setor.** Quando a Ana (Financeiro) entra, a tela pede ao `acessos.py` os portais dela:
+O filtro percorre os portais e inclui cada atalho quando o setor da pessoa está entre os liberados:
 
 ```python
 elif usuario["setor"] in portal["setores"]:
     liberados.append(portal)
 ```
 
-Se `"Financeiro"` está na lista de setores do portal, ele aparece para ela. Se não está, fica de fora. O Bruno (Operações) não vê o Portal de Notas até o administrador marcar "Operações" também.
-
-**4. O navegador abre.** Clicar no nome ou na imagem chama `abrir_portal`, que faz só isto:
+O clique usa a biblioteca padrão do Python para abrir o endereço cadastrado:
 
 ```python
 webbrowser.open(portal["endereco"])
 ```
 
-É o mesmo que clicar num link: abre o navegador padrão no endereço original.
+## Escopo acadêmico
 
----
+Esta versão roda localmente e usa contas e endereços de exemplo. O filtro por setor organiza a **visibilidade dos atalhos na Central**. As contas de ensaio são gravadas em texto no arquivo local `dados.json`. Para uma implantação interna, a autenticação e a gestão de contas precisariam ser avaliadas com a equipe de TI da empresa.
 
-## O que é novo além de if, elif, else, print e input
+A Central é um projeto acadêmico independente, apresentado à Portonave no contexto do SENAI.
 
-O Tkinter obriga a usar quatro coisas que talvez vocês ainda não tenham visto. Elas aparecem o tempo todo no código:
+## Apoio no desenvolvimento
 
-| O que é | Exemplo no projeto | Em uma frase |
-|---|---|---|
-| **`def` (função)** | `def abrir_portal(portal):` | Um bloco de código com nome, que roda quando é chamado. Cada tela é uma função. |
-| **Lista `[ ]`** | `["Financeiro", "Operações"]` | Vários valores guardados em ordem. |
-| **Dicionário `{ }`** | `portal["nome"]` | Valores guardados com um nome (a "chave"). |
-| **`for`** | `for portal in portais:` | Repete o bloco para cada item da lista. |
+<a href="https://www.anthropic.com/claude-code"><img src="https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/claudecode-color.svg" alt="Ícone do Claude Code" width="26" height="26"></a>
+<strong>Claude Code · Anthropic</strong>
 
-E uma quinta, que aparece nos botões:
-
-- **`lambda`**: `command=lambda: abrir_portal(portal)` quer dizer "quando clicar, rode `abrir_portal(portal)`". Sem o `lambda`, a função rodaria na hora em que o botão é criado, e não no clique.
-
----
-
-## Onde ficam os dados
-
-- **`dados.json`**: setores, funcionários e portais. É criado na primeira vez que o programa abre, já com os exemplos. Para voltar ao começo, feche o programa e apague este arquivo.
-- **`imagens/`**: o ícone padrão (`portal_padrao.png`). As imagens dos portais precisam ser **PNG ou GIF**, que é o que o Tkinter abre sem instalar nada.
-
-## Limites desta versão (falem disso se perguntarem)
-
-- **As senhas ficam escritas no `dados.json`.** Quem abrir o arquivo consegue ler. Para um protótipo de sala de aula serve. Num uso real, as senhas seriam guardadas como hash, ou o login viria do sistema da empresa.
-- **A Central esconde atalhos, mas não protege os sistemas.** Quem souber o endereço consegue digitar direto no navegador. Por isso o login de cada sistema continua valendo: é ele que protege de verdade.
-- **Não tem barra de rolagem em "Meus acessos".** Numa tela 1024 × 650 cabem cerca de 9 portais (3 por linha). Acima disso, seria preciso adicionar rolagem.
-- **O vermelho (`#C8102E`) é provisório**, inspirado na Portonave. Se vocês receberem o manual da marca, troquem o valor de `VERMELHO` no começo do `central.py`.
-
----
-
-## Testes feitos antes da entrega
-
-Rodamos o programa de verdade, com telas e cliques, e conferimos cada passo:
-
-| # | Teste | Resultado |
-|---|---|---|
-| 1 | Admin cadastra o "Portal de Notas (exemplo)" liberado só para Financeiro | ✅ salvo no `dados.json` só com Financeiro |
-| 2 | Ana (Financeiro) entra e vê o portal | ✅ |
-| 2 | "Detalhes" mostra a descrição; "Abrir portal" abre o endereço | ✅ |
-| 2 | Clicar no nome e clicar na imagem abrem `https://example.com/notas` | ✅ testado com cliques reais do mouse |
-| 3 | Bruno (Operações) entra e **não** vê o portal | ✅ |
-| 4 | Admin edita o portal, marca Operações; Bruno passa a ver | ✅ |
-| 5 | Fecha e reabre o programa: portal e permissões continuam | ✅ |
-| extra | Senha errada mostra "Usuário ou senha incorretos." | ✅ |
-| extra | Endereço sem `http://` é recusado com aviso | ✅ |
-| extra | Funcionário não vê o menu Administração | ✅ |
-| extra | Telas conferidas maximizada (1920 × 1080) e em 1024 × 650 | ✅ |
-
-As capturas estão na pasta `capturas/`. Elas foram tiradas no Linux, então a fonte é um pouco diferente da Segoe UI que aparece no Windows.
-
----
-
-Roteiro da apresentação: [`ROTEIRO_APRESENTACAO.md`](ROTEIRO_APRESENTACAO.md)
+O Claude Code foi utilizado como ferramenta de apoio ao desenvolvimento e à documentação. [Ícone do Claude Code via LobeHub Icons](https://dashboardicons.com/icons/external/lobehub/claudecode).
