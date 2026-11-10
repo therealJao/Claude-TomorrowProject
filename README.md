@@ -82,7 +82,3 @@ Esta versão roda localmente e usa contas e endereços de exemplo. O filtro por 
 
 ## Apoio no desenvolvimento
 
-<a href="https://www.anthropic.com/claude-code"><img src="https://raw.githubusercontent.com/lobehub/lobe-icons/master/packages/static-svg/icons/claudecode-color.svg" alt="Ícone do Claude Code" width="26" height="26"></a>
-<strong>Claude Code · Anthropic</strong>
-
-O Claude Code foi utilizado como ferramenta de apoio ao desenvolvimento e à documentação. [Ícone do Claude Code via LobeHub Icons](https://dashboardicons.com/icons/external/lobehub/claudecode).
