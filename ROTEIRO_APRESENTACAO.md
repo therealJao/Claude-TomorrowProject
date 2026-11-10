@@ -1,68 +1,56 @@
-# Roteiro da apresentação: Central de Acessos
+# Roteiro da apresentação
 
-Tempo total: cerca de **7 minutos**. Deixem o programa aberto antes de começar, na tela de entrada.
+Cerca de **7 minutos**. Antes de começar:
 
-Antes do ensaio, apaguem o `dados.json` para começar só com os exemplos.
-
----
+- Adicionem capa e prints em pelo menos 2 ou 3 sistemas, para a tela ficar com cara de pronta.
+- Cliquem em cada portal uma vez para conferir que o endereço abre.
+- Deixem o programa aberto na tela de entrada.
 
 ## 1. O problema (1 min)
 
-> "Numa empresa grande, cada setor usa vários sistemas diferentes, cada um num endereço. O funcionário precisa lembrar onde fica cada um. A Central de Acessos junta esses atalhos num lugar só, e cada setor vê apenas o que é dele."
+> "Cada setor do terminal usa vários sistemas, e cada um fica num endereço diferente. A Central junta esses atalhos num lugar só, e cada setor vê só o que é dele."
 
-Usem a imagem do quarto com portais:
+> "Pensem num quarto com portais. Cada portal leva a um sistema que já existe. A Central não substitui o sistema: o login dele continua valendo."
 
-> "É como um quarto com portais. A empresa coloca um portal, e ele leva ao sistema que já existe. A Central não substitui o sistema: o login dele continua valendo."
+## 2. O funcionário (2 min)
 
-## 2. O funcionário (1 min 30 s)
-
-1. Entrem com **`ana` / `ana123`** (Financeiro).
-2. Mostrem a tela **Meus acessos**: só imagem, nome e "Detalhes".
-3. Cliquem em **Detalhes** num portal → aparece a descrição → **Abrir portal** abre o navegador.
-
-> "Os links do ensaio são exemplos. A empresa cadastra os endereços dela."
+1. Entrem com `teste.operacoes` / `teste123`.
+2. Passem o mouse numa capa: aparece **Ver detalhes**.
+3. Cliquem na faixa: abre a página do sistema, com os prints. Cliquem nas miniaturas para trocar o print.
+4. Cliquem em **Abrir portal**: abre o navegador.
 
 ## 3. O administrador (2 min)
 
-1. **Sair** → entrem com **`admin` / `admin123`**.
-2. **Administração → Novo portal**:
-   - Nome: `Portal de Notas (exemplo)`
-   - Endereço: `https://example.com/notas`
-   - Descrição: `Consulta e emissão de notas fiscais.`
-   - Marquem **só Financeiro** → **Salvar portal**.
+1. **Sair** → `admin` / `admin123` → **Administração** → **Novo portal**.
+2. Cadastrem um sistema ao vivo. Escolham a capa e um print, e marquem **só Financeiro**.
+3. **Salvar portal**.
 
-## 4. A prova do filtro por setor (1 min 30 s)
+## 4. A prova do filtro (1 min 30 s)
 
-1. **Sair** → `ana` / `ana123` → o Portal de Notas **aparece**.
-2. **Sair** → `bruno` / `bruno123` (Operações) → o portal **não aparece**.
-3. **Sair** → `admin` → **Editar** o portal → marquem **Operações** → **Salvar**.
-4. **Sair** → `bruno` → agora **aparece**.
-5. Fechem a janela e abram de novo → continua tudo salvo.
+1. **Sair** → `teste.financeiro` → o portal novo **aparece**.
+2. **Sair** → `teste.operacoes` → **não aparece**.
+3. **Sair** → `admin` → **Editar** → marquem **Operações** → **Salvar**.
+4. **Sair** → `teste.operacoes` → agora **aparece**.
+5. Fechem a janela e abram de novo: continua tudo lá.
 
-## 5. Como funciona por dentro (1 min)
+## 5. Por dentro (30 s)
 
-Abram o `acessos.py` (14 linhas) e mostrem:
+Mostrem o `acessos.py`:
 
 ```python
 elif usuario["setor"] in portal["setores"]:
     liberados.append(portal)
 ```
 
-> "Essa é a regra inteira. Se o setor da pessoa está na lista de setores do portal, ele aparece."
-
-Depois, uma frase sobre o resto:
-
-> "O `cadastro.py` salva tudo no arquivo `dados.json`. Por isso nada se perde quando o programa fecha. E abrir o portal é uma linha: `webbrowser.open(endereco)`."
-
----
+> "Essa é a regra inteira: se o setor da pessoa está na lista do portal, ele aparece. Tudo fica salvo no arquivo dados.json."
 
 ## Perguntas que podem aparecer
 
-**"E se alguém digitar o endereço direto no navegador?"**
-> "Consegue. A Central organiza os atalhos, mas quem protege o sistema é o login dele. Por isso o login continua no sistema de destino."
+**"E se alguém digitar o endereço direto?"**
+> "Consegue abrir. Quem protege o sistema é o login dele. A Central organiza os caminhos."
 
 **"As senhas estão seguras?"**
-> "Nesta versão de protótipo, não: elas ficam no arquivo `dados.json`. Numa versão real, o login viria do sistema da empresa."
+> "No protótipo elas ficam no arquivo de dados. Numa versão real, o login viria do sistema da empresa."
 
 **"Vocês usaram IA?"**
-> Respondam com sinceridade. Por exemplo: "Usamos IA como ferramenta para montar o código, e depois estudamos cada parte para conseguir explicar e alterar."
+> Respondam com sinceridade. Por exemplo: "Usamos como ferramenta, e depois estudamos cada parte para conseguir explicar e mudar o código."
