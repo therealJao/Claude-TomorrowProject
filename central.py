@@ -15,24 +15,27 @@ import acessos
 import cadastro
 
 # ---------- Cores e fontes ----------
-VERMELHO = "#C8102E"  # provisório: trocar pelo vermelho oficial da Portonave
-VERMELHO_ESCURO = "#A00C24"
-VERMELHO_CLARO = "#FBECEE"
-BRANCO = "#FFFFFF"
-CINZA = "#F2F2F2"
-LINHA = "#E3E3E3"
-TEXTO = "#1F2328"
-TEXTO_SUAVE = "#5C6066"
+VERMELHO = "#FF4560"
+VERMELHO_ESCURO = "#DF2947"
+VERMELHO_CLARO = "#39202B"
+BRANCO = "#0D0F14"  # fundo das páginas e janelas
+CINZA = "#181D27"
+LINHA = "#2A3242"
+TEXTO = "#F4F6FB"
+TEXTO_SUAVE = "#AAB5C6"
+PAINEL = "#141821"
+NAV = "#10131B"
+TEXTO_BOTAO = "#100B12"
 
-FONTE = ("Segoe UI", 13)
-FONTE_NEGRITO = ("Segoe UI", 13, "bold")
-FONTE_PEQUENA = ("Segoe UI", 11)
-FONTE_TITULO = ("Segoe UI", 24, "bold")
-FONTE_SUBTITULO = ("Segoe UI", 18, "bold")
-FONTE_PORTAL = ("Segoe UI", 15, "bold")
+FONTE = ("Segoe UI", 12)
+FONTE_NEGRITO = ("Segoe UI", 12, "bold")
+FONTE_PEQUENA = ("Segoe UI", 10)
+FONTE_TITULO = ("Segoe UI", 29, "bold")
+FONTE_SUBTITULO = ("Segoe UI", 20, "bold")
+FONTE_PORTAL = ("Segoe UI", 16, "bold")
+FONTE_DESTAQUE = ("Segoe UI", 35, "bold")
 
 ICONE_PADRAO = "imagens/portal_padrao.png"
-COLUNAS = 3  # quantos portais aparecem em cada linha
 
 # Faz o programa achar dados.json e a pasta imagens mesmo se for aberto de outro lugar.
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -46,34 +49,38 @@ imagens_na_tela = []  # o Tkinter apaga imagens que não ficam guardadas numa li
 # PEÇAS QUE SE REPETEM
 # =====================================================================
 
-def texto(pai, conteudo, fonte=FONTE, cor=TEXTO):
-    return tk.Label(pai, text=conteudo, font=fonte, fg=cor, bg=BRANCO, justify="left")
+def texto(pai, conteudo, fonte=FONTE, cor=TEXTO, fundo=BRANCO, **opcoes):
+    return tk.Label(pai, text=conteudo, font=fonte, fg=cor, bg=fundo,
+                    justify="left", **opcoes)
+
+
+def botao(pai, nome, comando, fundo, cor, sobre, fonte=FONTE_NEGRITO, **opcoes):
+    item = tk.Button(pai, text=nome, command=comando, font=fonte, bg=fundo, fg=cor,
+                     activebackground=sobre, activeforeground=cor, relief="flat", bd=0,
+                     highlightthickness=2, highlightbackground=fundo, highlightcolor=VERMELHO,
+                     cursor="hand2", **opcoes)
+    item.bind("<Enter>", lambda evento: item.config(bg=sobre))
+    item.bind("<Leave>", lambda evento: item.config(bg=fundo))
+    return item
 
 
 def botao_vermelho(pai, conteudo, comando):
-    return tk.Button(pai, text=conteudo, command=comando, font=FONTE_NEGRITO,
-                     bg=VERMELHO, fg=BRANCO, activebackground=VERMELHO_ESCURO,
-                     activeforeground=BRANCO, relief="flat", padx=22, pady=8, cursor="hand2",
-                     highlightthickness=0)
+    return botao(pai, conteudo, comando, VERMELHO, TEXTO_BOTAO, "#FF6D82", padx=19, pady=9)
 
 
 def botao_cinza(pai, conteudo, comando):
-    return tk.Button(pai, text=conteudo, command=comando, font=FONTE,
-                     bg=CINZA, fg=TEXTO, activebackground=LINHA,
-                     relief="flat", padx=18, pady=8, cursor="hand2", highlightthickness=0)
+    return botao(pai, conteudo, comando, CINZA, TEXTO, LINHA, padx=15, pady=8)
 
 
-def botao_link(pai, conteudo, comando, fonte=FONTE, cor=TEXTO):
-    return tk.Button(pai, text=conteudo, command=comando, font=fonte,
-                     bg=BRANCO, fg=cor, activebackground=BRANCO, activeforeground=cor,
-                     relief="flat", bd=0, padx=0, pady=0, cursor="hand2",
-                     anchor="w", justify="left", highlightthickness=0)
+def botao_link(pai, conteudo, comando, fonte=FONTE, cor=TEXTO, fundo=BRANCO, **opcoes):
+    return botao(pai, conteudo, comando, fundo, cor, LINHA, fonte=fonte, **opcoes)
 
 
 def campo(pai, valor="", esconder=False):
-    caixa = tk.Entry(pai, font=FONTE, width=40, fg=TEXTO, bg=BRANCO, relief="flat",
-                     highlightthickness=1, highlightbackground="#949494",
-                     highlightcolor=VERMELHO)
+    caixa = tk.Entry(pai, font=FONTE, width=38, fg=TEXTO, bg=CINZA, relief="flat",
+                     insertbackground=TEXTO, selectbackground=VERMELHO_CLARO,
+                     selectforeground=TEXTO, highlightthickness=1,
+                     highlightbackground=LINHA, highlightcolor=VERMELHO)
     if esconder:
         caixa.config(show="•")
     caixa.insert(0, valor)
@@ -108,7 +115,10 @@ def carregar_icone(portal):
     caminho = portal["imagem"]
     if caminho == "" or not os.path.exists(caminho):
         caminho = ICONE_PADRAO
-    imagem = tk.PhotoImage(file=caminho)
+    try:
+        imagem = tk.PhotoImage(file=caminho)
+    except tk.TclError:
+        imagem = tk.PhotoImage(file=ICONE_PADRAO)
 
     # Imagens grandes são reduzidas até ficarem com no máximo 72 pixels.
     reducao = 1
@@ -139,48 +149,90 @@ def centralizar(janela_pequena):
     x = (janela_pequena.winfo_screenwidth() - janela_pequena.winfo_width()) // 2
     y = (janela_pequena.winfo_screenheight() - janela_pequena.winfo_height()) // 3
     janela_pequena.geometry(f"+{x}+{y}")
-    janela_pequena.wait_visibility()
+    if not janela_pequena.winfo_viewable():
+        janela_pequena.wait_visibility()
     janela_pequena.grab_set()
 
 
 def limpar_tela():
+    janela.unbind("<MouseWheel>")
+    janela.unbind("<Control-f>")
     for parte in janela.winfo_children():
         parte.destroy()
     imagens_na_tela.clear()
 
 
+def painel_destaque(pai, rotulo, titulo, legenda, altura=164):
+    # A malha é desenhada pelo Tkinter e se ajusta ao tamanho da janela.
+    painel = tk.Canvas(pai, bg="#151924", height=altura, highlightthickness=0)
+
+    def desenhar(evento):
+        painel.delete("all")
+        largura, altura_atual = evento.width, evento.height
+        centro = int(largura * .83)
+        for x in range(max(32, largura // 2), largura, 24):
+            painel.create_line(x, 0, x, altura_atual, fill="#202638")
+        for y in range(14, altura_atual, 24):
+            painel.create_line(largura // 2, y, largura, y, fill="#202638")
+        painel.create_polygon(largura * .70, 0, largura, 0, largura, altura_atual,
+                              largura * .60, altura_atual, fill="#211A29", stipple="gray50")
+        for deslocamento in (0, 16, 32):
+            painel.create_line(centro + deslocamento, 0,
+                               centro - altura_atual // 2 + deslocamento, altura_atual,
+                               fill="#603044", width=1)
+        painel.create_rectangle(0, 0, 4, altura_atual, fill=VERMELHO, width=0)
+        painel.create_text(24, 22, text=rotulo, anchor="nw",
+                           fill="#FF8A9B", font=FONTE_PEQUENA)
+        painel.create_text(22, 46, text=titulo, anchor="nw", fill=TEXTO, font=FONTE_DESTAQUE)
+        painel.create_text(25, 115, text=legenda, anchor="nw", fill=TEXTO_SUAVE,
+                           font=FONTE, width=max(200, largura - 52))
+
+    painel.bind("<Configure>", desenhar)
+    return painel
+
+
 def montar_topo(pagina):
-    # Topo de todas as páginas: nome, menu, pessoa logada e "Sair".
     limpar_tela()
-    tk.Frame(janela, bg=VERMELHO, height=4).pack(fill="x")
+    lateral = tk.Frame(janela, bg=NAV, width=214, highlightbackground=LINHA,
+                       highlightthickness=1)
+    lateral.pack(side="left", fill="y")
+    lateral.pack_propagate(False)
 
-    barra = tk.Frame(janela, bg=BRANCO)
-    barra.pack(fill="x", padx=48)
-    texto(barra, "Central de Acessos", ("Segoe UI", 15, "bold")).pack(side="left", padx=(0, 48))
-    item_do_menu(barra, "Meus acessos", tela_meus_acessos, pagina == "meus acessos")
-    if usuario_logado["admin"]:
-        item_do_menu(barra, "Administração", tela_administracao, pagina == "administracao")
-    botao_link(barra, "Sair", tela_entrada, cor=VERMELHO).pack(side="right")
-    texto(barra, usuario_logado["nome"], cor=TEXTO_SUAVE).pack(side="right", padx=(0, 24))
+    marca = tk.Frame(lateral, bg=NAV)
+    marca.pack(fill="x", padx=19, pady=(26, 27))
+    texto(marca, "CENTRAL", ("Segoe UI", 23, "bold"), TEXTO, NAV).pack(anchor="w")
+    texto(marca, "ACESSOS DO TERMINAL", FONTE_PEQUENA, VERMELHO, NAV).pack(anchor="w")
+    texto(lateral, "NAVEGAÇÃO", FONTE_PEQUENA, TEXTO_SUAVE, NAV).pack(anchor="w", padx=19, pady=(0, 8))
 
-    tk.Frame(janela, bg=LINHA, height=1).pack(fill="x")
+    for rotulo, chave, acao in (
+        ("Meus acessos", "meus acessos", tela_meus_acessos),
+        ("Administração", "administracao", tela_administracao),
+    ):
+        if chave == "administracao" and not usuario_logado["admin"]:
+            continue
+        fundo = VERMELHO_CLARO if pagina == chave else NAV
+        cor = "#FF9FAE" if pagina == chave else TEXTO
+        botao(lateral, rotulo, acao, fundo, cor, CINZA, anchor="w",
+              padx=12, pady=9).pack(fill="x", padx=12, pady=3)
+
+    sessao = tk.Frame(lateral, bg=NAV)
+    sessao.pack(side="bottom", fill="x", padx=16, pady=(0, 18))
+    tk.Frame(sessao, bg=LINHA, height=1).pack(fill="x", pady=(0, 12))
+    texto(sessao, usuario_logado["nome"], FONTE_PEQUENA, TEXTO_SUAVE, NAV,
+          wraplength=166).pack(anchor="w")
+    botao_link(sessao, "Sair da conta", tela_entrada, cor=TEXTO, fundo=NAV,
+               padx=0, pady=7).pack(anchor="w")
+
     area = tk.Frame(janela, bg=BRANCO)
-    area.pack(fill="both", expand=True, padx=48, pady=(36, 24))
+    area.pack(side="left", fill="both", expand=True, padx=28, pady=24)
     return area
 
 
 def item_do_menu(pai, nome, comando, selecionado):
-    # O item selecionado fica vermelho e com uma linha vermelha embaixo.
-    if selecionado:
-        cor = VERMELHO
-        cor_da_linha = VERMELHO
-    else:
-        cor = TEXTO
-        cor_da_linha = BRANCO
-    caixa = tk.Frame(pai, bg=BRANCO)
-    caixa.pack(side="left", padx=(0, 32))
-    botao_link(caixa, nome, comando, FONTE_NEGRITO, cor).pack(pady=(16, 12))
-    tk.Frame(caixa, bg=cor_da_linha, height=3).pack(fill="x")
+    fundo = VERMELHO_CLARO if selecionado else BRANCO
+    cor = "#FF9FAE" if selecionado else TEXTO_SUAVE
+    botao(pai, nome, comando, fundo, cor, CINZA,
+          padx=13, pady=7).pack(side="left", padx=(0, 8))
 
 
 # =====================================================================
@@ -191,18 +243,24 @@ def tela_entrada():
     global usuario_logado
     usuario_logado = None
     limpar_tela()
-    tk.Frame(janela, bg=VERMELHO, height=4).pack(fill="x")
 
-    caixa = tk.Frame(janela, bg=BRANCO)
-    caixa.place(relx=0.5, rely=0.42, anchor="center")
-    texto(caixa, "Central de Acessos", FONTE_TITULO).pack(anchor="w")
-    texto(caixa, "Entre para ver os sistemas liberados para o seu setor.",
-          cor=TEXTO_SUAVE).pack(anchor="w", pady=(6, 28))
+    centro = tk.Frame(janela, bg=BRANCO)
+    centro.place(relx=.5, rely=.48, relwidth=.84, anchor="center")
+    centro.columnconfigure(0, weight=3)
+    centro.columnconfigure(1, weight=2)
+    painel_destaque(centro, "CENTRAL  /  ACESSOS", "Portais do terminal",
+                    "Os sistemas que você usa, reunidos em um catálogo.",
+                    altura=360).grid(row=0, column=0, sticky="nsew", padx=(0, 22))
 
+    caixa = tk.Frame(centro, bg=BRANCO, highlightbackground=LINHA,
+                    highlightthickness=1, padx=23, pady=23)
+    caixa.grid(row=0, column=1, sticky="nsew")
+    texto(caixa, "Entrar", FONTE_TITULO).pack(anchor="w")
+    texto(caixa, "Use sua conta da Central.", cor=TEXTO_SUAVE).pack(anchor="w", pady=(4, 17))
     campo_usuario = campo_com_titulo(caixa, "Usuário")
     campo_senha = campo_com_titulo(caixa, "Senha", esconder=True)
-    mensagem = texto(caixa, "", FONTE_PEQUENA, VERMELHO)
-    mensagem.pack(anchor="w", pady=(0, 10))
+    mensagem = texto(caixa, "", FONTE_PEQUENA, "#FF9FAE")
+    mensagem.pack(anchor="w", pady=(0, 6))
 
     def tentar_entrar():
         entrar(campo_usuario.get(), campo_senha.get(), mensagem)
@@ -229,53 +287,99 @@ def entrar(usuario_digitado, senha_digitada, mensagem):
 
 def tela_meus_acessos():
     area = montar_topo("meus acessos")
-    texto(area, "Meus acessos", FONTE_TITULO).pack(anchor="w")
-    if usuario_logado["admin"]:
-        texto(area, "Como administrador, você vê todos os portais cadastrados.",
-              cor=TEXTO_SUAVE).pack(anchor="w", pady=(4, 0))
+    painel_destaque(area, "CATÁLOGO  /  TERMINAL", "Meus acessos",
+                    "Abra os portais que você usa no trabalho.").pack(fill="x")
 
-    # A regra que decide o que cada pessoa vê está em acessos.py.
+    # O catálogo e a busca partem apenas dos portais liberados para a conta.
     portais = acessos.portais_do_usuario(usuario_logado, dados["portais"])
+    barra = tk.Frame(area, bg=BRANCO)
+    barra.pack(fill="x", pady=(19, 12))
+    resultado = texto(barra, "", FONTE_NEGRITO)
+    resultado.pack(side="left")
+    busca = tk.StringVar()
+    caixa = campo(barra)
+    caixa.config(textvariable=busca, width=22)
+    caixa.pack(side="right", ipady=5)
+    texto(barra, "Buscar portal", FONTE_PEQUENA, TEXTO_SUAVE).pack(side="right", padx=9)
 
-    if len(portais) == 0:
-        texto(area, "Ainda não há portais liberados para o seu setor.",
-              FONTE_NEGRITO).pack(anchor="w", pady=(32, 4))
-        texto(area, "Peça ao administrador da Central para liberar o sistema de que você precisa.",
-              cor=TEXTO_SUAVE).pack(anchor="w")
-        return
+    corpo = tk.Frame(area, bg=BRANCO)
+    corpo.pack(fill="both", expand=True)
+    tela = tk.Canvas(corpo, bg=BRANCO, highlightthickness=0)
+    rolagem = ttk.Scrollbar(corpo, orient="vertical", command=tela.yview)
+    tela.configure(yscrollcommand=rolagem.set)
+    rolagem.pack(side="right", fill="y")
+    tela.pack(side="left", fill="both", expand=True)
+    grade = tk.Frame(tela, bg=BRANCO)
+    bloco = tela.create_window((0, 0), window=grade, anchor="nw")
+    ultimo_estado = None
 
-    grade = tk.Frame(area, bg=BRANCO)
-    grade.pack(anchor="w", pady=(32, 0))
-    for coluna in range(COLUNAS):
-        grade.columnconfigure(coluna, minsize=300)
+    def atualizar(evento=None):
+        nonlocal ultimo_estado
+        largura = tela.winfo_width()
+        tela.itemconfigure(bloco, width=largura)
+        if largura >= 1000:
+            colunas = 3
+        elif largura >= 550:
+            colunas = 2
+        else:
+            colunas = 1
+        termo = busca.get().strip().casefold()
+        estado = (colunas, termo)
+        if estado == ultimo_estado:
+            return
+        ultimo_estado = estado
 
-    numero = 0
-    for portal in portais:
-        linha = numero // COLUNAS
-        coluna = numero % COLUNAS
-        mostrar_portal(grade, portal, linha, coluna)
-        numero = numero + 1
+        for filho in grade.winfo_children():
+            filho.destroy()
+        imagens_na_tela.clear()
+        for coluna in range(3):
+            grade.columnconfigure(coluna, weight=1 if coluna < colunas else 0,
+                                  uniform="portais" if coluna < colunas else "")
+        filtrados = [portal for portal in portais if termo in portal["nome"].casefold()]
+        total = len(filtrados)
+        resultado.config(text=f"{total:02d} {'portal disponível' if total == 1 else 'portais disponíveis'}")
+        tela.yview_moveto(0)
+
+        if not filtrados:
+            mensagem = "Nenhum portal encontrado." if termo else "Seu setor ainda não tem portais liberados."
+            texto(grade, mensagem, FONTE, TEXTO_SUAVE).grid(row=0, column=0, sticky="w", pady=17)
+        for indice, portal in enumerate(filtrados):
+            mostrar_portal(grade, portal, indice // colunas, indice % colunas)
+
+    def rolar(evento):
+        if evento.delta:
+            tela.yview_scroll(-1 if evento.delta > 0 else 1, "units")
+
+    grade.bind("<Configure>", lambda evento: tela.config(scrollregion=tela.bbox("all")))
+    tela.bind("<Configure>", atualizar)
+    janela.bind("<MouseWheel>", rolar)
+    janela.bind("<Control-f>", lambda evento: caixa.focus_set())
+    busca.trace_add("write", lambda *args: atualizar())
+    caixa.bind("<Escape>", lambda evento: busca.set(""))
+    atualizar()
 
 
 def mostrar_portal(grade, portal, linha, coluna):
-    # Cada portal mostra só: imagem, nome e "Detalhes".
-    item = tk.Frame(grade, bg=BRANCO)
-    item.grid(row=linha, column=coluna, sticky="nw", pady=(0, 40))
+    item = tk.Frame(grade, bg=PAINEL, highlightbackground=LINHA, highlightthickness=1)
+    item.grid(row=linha, column=coluna, sticky="nsew", padx=(0, 13), pady=(0, 13))
+    topo = tk.Frame(item, bg=PAINEL)
+    topo.pack(fill="x", padx=14, pady=(14, 8))
+    miniatura = botao_link(topo, "", lambda: abrir_portal(portal), fundo=CINZA, padx=7, pady=6)
+    miniatura.configure(image=carregar_icone(portal))
+    miniatura.pack(side="left")
+    texto(topo, "PORTAL", FONTE_PEQUENA, "#FF8A9B", PAINEL).pack(side="right", anchor="n")
 
-    imagem = carregar_icone(portal)
-    tk.Button(item, image=imagem, command=lambda: abrir_portal(portal),
-              relief="flat", bd=0, bg=BRANCO, activebackground=BRANCO,
-              cursor="hand2", highlightthickness=0).grid(row=0, column=0, rowspan=2, sticky="n", padx=(0, 16))
+    nome = botao_link(item, portal["nome"], lambda: abrir_portal(portal),
+                      FONTE_PORTAL, TEXTO, PAINEL, wraplength=205, anchor="w", justify="left")
+    nome.pack(fill="x", padx=13, pady=(1, 8))
 
-    nome = botao_link(item, portal["nome"], lambda: abrir_portal(portal), FONTE_PORTAL)
-    nome.config(wraplength=200)
-    nome.grid(row=0, column=1, sticky="w")
-    # O nome fica vermelho quando o mouse passa por cima, como um link.
-    nome.bind("<Enter>", lambda evento: nome.config(fg=VERMELHO))
-    nome.bind("<Leave>", lambda evento: nome.config(fg=TEXTO))
-
-    botao_link(item, "Detalhes", lambda: janela_detalhes(portal),
-               FONTE, VERMELHO).grid(row=1, column=1, sticky="w", pady=(4, 0))
+    tk.Frame(item, bg=LINHA, height=1).pack(fill="x", padx=14)
+    acoes = tk.Frame(item, bg=PAINEL)
+    acoes.pack(fill="x", padx=14, pady=8)
+    botao_link(acoes, "Detalhes", lambda: janela_detalhes(portal), FONTE_PEQUENA,
+               TEXTO_SUAVE, PAINEL, padx=4, pady=5).pack(side="left")
+    botao_link(acoes, "Abrir  ↗", lambda: abrir_portal(portal), FONTE_PEQUENA,
+               "#FF9FAE", VERMELHO_CLARO, padx=10, pady=5).pack(side="right")
 
 
 def abrir_portal(portal):
@@ -295,7 +399,8 @@ def janela_detalhes(portal):
     descricao = texto(corpo, portal["descricao"])
     descricao.config(wraplength=440)
     descricao.pack(anchor="w", pady=(16, 8))
-    texto(corpo, portal["endereco"], FONTE_PEQUENA, TEXTO_SUAVE).pack(anchor="w")
+    texto(corpo, portal["endereco"], FONTE_PEQUENA, TEXTO_SUAVE,
+          wraplength=440).pack(anchor="w")
 
     def abrir_e_fechar():
         abrir_portal(portal)
@@ -314,7 +419,8 @@ def janela_detalhes(portal):
 
 def tela_administracao(aba="Portais"):
     area = montar_topo("administracao")
-    texto(area, "Administração", FONTE_TITULO).pack(anchor="w")
+    painel_destaque(area, "GESTÃO  /  CENTRAL", "Administração",
+                    "Cadastre portais e escolha quem pode vê-los.").pack(fill="x")
 
     abas = tk.Frame(area, bg=BRANCO)
     abas.pack(anchor="w", pady=(8, 0))
@@ -643,7 +749,17 @@ if __name__ == "__main__":
     janela = tk.Tk()
     janela.title("Central de Acessos")
     janela.configure(bg=BRANCO)
+    janela.geometry("1280x800")
     janela.minsize(1000, 640)
+    estilo = ttk.Style(janela)
+    estilo.theme_use("clam")
+    estilo.configure("TScrollbar", background=CINZA, troughcolor=BRANCO,
+                     bordercolor=BRANCO, arrowcolor=TEXTO_SUAVE)
+    estilo.configure("TCombobox", fieldbackground=CINZA, foreground=TEXTO,
+                     background=CINZA, arrowcolor=TEXTO, bordercolor=LINHA)
+    estilo.map("TCombobox", fieldbackground=[("readonly", CINZA)],
+               foreground=[("readonly", TEXTO)], selectbackground=[("readonly", CINZA)],
+               selectforeground=[("readonly", TEXTO)])
     try:
         janela.state("zoomed")  # abre maximizada no Windows
     except tk.TclError:
